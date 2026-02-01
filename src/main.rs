@@ -35,8 +35,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .connect(&config.database_url)
     .await?;
 
-  tracing::info!("Running database migrations...");
-  sqlx::migrate!("./migrations").run(&pool).await?;
+  if config.database_migrations {
+    tracing::info!("Running database migrations...");
+    sqlx::migrate!("./migrations").run(&pool).await?;
+  }
 
   let state = AppState::new(&config, pool.clone());
 

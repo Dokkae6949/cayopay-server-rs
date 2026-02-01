@@ -28,7 +28,6 @@ pub mod invites;
             auth::LoginRequest,
             auth::UserResponse,
             invites::InviteRequest,
-            invites::InviteResponse,
         )
     ),
     tags(

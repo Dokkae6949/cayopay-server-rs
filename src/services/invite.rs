@@ -25,6 +25,8 @@ impl InviteService {
   }
 
   pub async fn create_invite(&self, created_by: Id<User>, email: Email) -> AppResult<Invite> {
+    // TODO: Check if an invite already exists for this email.
+
     let token = Uuid::new_v4().to_string();
 
     let invite = Invite {

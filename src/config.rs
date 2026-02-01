@@ -8,6 +8,8 @@ pub struct Config {
   pub port: u16,
 
   pub database_url: String,
+  #[serde(default)]
+  pub database_migrations: bool,
 
   pub smtp_host: String,
   pub smtp_port: u16,

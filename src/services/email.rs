@@ -1,6 +1,10 @@
 use lettre::{
-  message::header::ContentType, transport::smtp::authentication::Credentials, AsyncSmtpTransport,
-  AsyncTransport, Message, Tokio1Executor,
+  message::header::ContentType,
+  transport::smtp::{
+    authentication::Credentials,
+    client::{Tls, TlsParameters},
+  },
+  AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
 
 use crate::{
@@ -17,13 +21,38 @@ pub struct EmailService {
 
 impl EmailService {
   pub fn new(config: &Config) -> Self {
+    tracing::info!(
+      "Initializing EmailService with host: {}, port: {}",
+      config.smtp_host,
+      config.smtp_port
+    );
+
     let creds = Credentials::new(config.smtp_username.clone(), config.smtp_password.clone());
 
-    let mailer = AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
+    let mut mailer_builder = AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
       .expect("mailer should have been created")
       .port(config.smtp_port)
-      .credentials(creds)
-      .build();
+      .credentials(creds);
+
+    match config.smtp_port {
+      465 => {
+        tracing::info!("Using Implicit TLS (Wrapper) for port 465");
+        mailer_builder = mailer_builder.tls(Tls::Wrapper(
+          TlsParameters::new(config.smtp_host.clone()).expect("failed to create tls parameters"),
+        ));
+      }
+      587 => {
+        tracing::info!("Using Opportunistic TLS (STARTTLS) for port 587");
+        mailer_builder = mailer_builder.tls(Tls::Opportunistic(
+          TlsParameters::new(config.smtp_host.clone()).expect("failed to create tls parameters"),
+        ));
+      }
+      _ => {
+        tracing::info!("Using default TLS settings for port {}", config.smtp_port);
+      }
+    }
+
+    let mailer = mailer_builder.build();
 
     Self {
       mailer,
@@ -42,9 +71,9 @@ impl EmailService {
         AppError::InternalServerError
       })?)
       .subject("You have been invited to CayoPay")
-      .header(ContentType::TEXT_PLAIN)
+      .header(ContentType::TEXT_HTML)
       .body(format!(
-        "You have been invited to CayoPay by {}.\n\nYour invite token is: {}\n",
+        "<h1>CayoPay Invitation</h1><br><p>You have been invited to CayoPay by <b>{}</b>.</p><br><p>Your invite token is: <i>{}</i></p>",
         inviter_name, token
       ))
       .map_err(|e| {
