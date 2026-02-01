@@ -3,3 +3,8 @@
 # Nix Files
 .envrc
 .direnv/
+
+# Secrets
+.env
+.env.*
+!.env.example
