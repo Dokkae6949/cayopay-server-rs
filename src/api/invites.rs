@@ -1,4 +1,4 @@
-use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
+use axum::{extract::State, routing::post, Json, Router};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
@@ -6,7 +6,7 @@ use validator::Validate;
 use crate::{
   api::extractor::AuthUser,
   app_state::AppState,
-  error::{AppResult, ErrorResponse},
+  error::AppResult,
   types::Email,
 };
 
