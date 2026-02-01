@@ -7,6 +7,7 @@ use crate::services::{EmailService, InviteService};
 
 #[derive(Clone)]
 pub struct AppState {
+  pub config: Config,
   pub auth_service: AuthService,
   pub session_service: SessionService,
   pub invite_service: InviteService,
@@ -19,6 +20,7 @@ impl AppState {
     let invite_service = InviteService::new(pool.clone(), email_service);
 
     Self {
+      config: config.clone(),
       auth_service: AuthService::new(pool.clone()),
       session_service: SessionService::new(pool.clone()),
       invite_service,

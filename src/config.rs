@@ -6,6 +6,7 @@ pub struct Config {
   pub host: String,
   #[serde(default = "default_port")]
   pub port: u16,
+
   pub database_url: String,
 
   pub smtp_host: String,
@@ -13,6 +14,9 @@ pub struct Config {
   pub smtp_username: String,
   pub smtp_password: String,
   pub smtp_from: String,
+
+  #[serde(default = "default_session_cookie_name")]
+  pub session_cookie_name: String,
 }
 
 fn default_host() -> String {
@@ -21,6 +25,10 @@ fn default_host() -> String {
 
 fn default_port() -> u16 {
   3000
+}
+
+fn default_session_cookie_name() -> String {
+  "cayopay_session".to_string()
 }
 
 impl Config {

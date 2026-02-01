@@ -1,5 +1,6 @@
 use crate::app_state::AppState;
 use axum::Router;
+use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -42,8 +43,18 @@ pub fn router(state: AppState) -> Router {
     .nest("/auth", auth::router())
     .nest("/invites", invites::router());
 
+  let mut openapi = ApiDoc::openapi();
+  if let Some(components) = openapi.components.as_mut() {
+    components.add_security_scheme(
+      "session_cookie",
+      SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new(
+        state.config.session_cookie_name.clone(),
+      ))),
+    );
+  }
+
   Router::new()
-    .merge(SwaggerUi::new("/api/docs").url("/api/docs/openapi.json", ApiDoc::openapi()))
+    .merge(SwaggerUi::new("/api/docs").url("/api/docs/openapi.json", openapi))
     .nest("/api", api_router)
     .with_state(state)
 }

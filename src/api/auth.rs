@@ -77,7 +77,7 @@ pub async fn login(
   let session = state.session_service.create_session(user.id).await?;
 
   // TODO: Control cookie attributes based on environment (e.g., Secure in production)
-  let cookie = Cookie::build(("session_id", session.token))
+  let cookie = Cookie::build((state.config.session_cookie_name.clone(), session.token))
     .path("/")
     .http_only(true)
     .same_site(SameSite::Strict)
@@ -98,6 +98,9 @@ pub async fn login(
         (status = StatusCode::OK, description = "Get current user successful", body = UserResponse),
         (status = StatusCode::UNAUTHORIZED, description = "Unauthorized", body = ErrorResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("session_cookie" = [])
     )
 )]
 pub async fn me(AuthUser(user): AuthUser) -> AppResult<Json<UserResponse>> {

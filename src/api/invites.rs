@@ -3,12 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
 
-use crate::{
-  api::extractor::AuthUser,
-  app_state::AppState,
-  error::AppResult,
-  types::Email,
-};
+use crate::{api::extractor::AuthUser, app_state::AppState, error::AppResult, types::Email};
 
 #[derive(Deserialize, Validate, ToSchema)]
 pub struct InviteRequest {
@@ -32,6 +27,9 @@ pub struct InviteResponse {
         (status = StatusCode::BAD_REQUEST, description = "Validation error", body = ErrorResponse),
         (status = StatusCode::UNAUTHORIZED, description = "Unauthorized", body = ErrorResponse),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Internal server error", body = ErrorResponse)
+    ),
+    security(
+        ("session_cookie" = [])
     )
 )]
 pub async fn create_invite(

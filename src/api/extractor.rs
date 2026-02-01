@@ -27,7 +27,9 @@ impl FromRequestParts<AppState> for AuthUser {
       .await
       .map_err(|_| AppError::AuthError)?;
 
-    let session_cookie = jar.get("session_id").ok_or(AppError::AuthError)?;
+    let session_cookie = jar
+      .get(&state.config.session_cookie_name)
+      .ok_or(AppError::AuthError)?;
     let token = session_cookie.value();
 
     let session = state
