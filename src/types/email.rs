@@ -30,3 +30,15 @@ impl From<String> for Email {
     Self::new(value)
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_debug_impl() {
+    let email = Email::new("test@mail.com");
+    let debug_str = format!("{:?}", email);
+    assert_eq!(debug_str, "Email(***)");
+  }
+}

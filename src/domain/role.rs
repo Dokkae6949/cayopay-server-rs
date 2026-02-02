@@ -64,3 +64,52 @@ impl Role {
     }
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_role_permissions() {
+    let owner_perms = Role::Owner.permissions();
+    assert!(owner_perms.contains(&Permission::ConfigureSettings));
+    assert!(owner_perms.contains(&Permission::InviteUsers));
+
+    let admin_perms = Role::Admin.permissions();
+    assert!(!admin_perms.contains(&Permission::ConfigureSettings));
+    assert!(admin_perms.contains(&Permission::InviteUsers));
+
+    let undefined_perms = Role::Undefined.permissions();
+    assert!(undefined_perms.is_empty());
+  }
+
+  #[test]
+  fn test_has_permission() {
+    assert!(Role::Owner.has_permission(Permission::ConfigureSettings));
+    assert!(Role::Owner.has_permission(Permission::InviteUsers));
+
+    assert!(!Role::Admin.has_permission(Permission::ConfigureSettings));
+    assert!(Role::Admin.has_permission(Permission::InviteUsers));
+
+    assert!(!Role::Undefined.has_permission(Permission::ConfigureSettings));
+    assert!(!Role::Undefined.has_permission(Permission::InviteUsers));
+  }
+
+  #[test]
+  fn test_can_assign_role() {
+    // Owner can assign Owner and Admin
+    assert!(Role::Owner.can_assign_role(Role::Owner));
+    assert!(Role::Owner.can_assign_role(Role::Admin));
+    assert!(!Role::Owner.can_assign_role(Role::Undefined));
+
+    // Admin can assign Admin only
+    assert!(!Role::Admin.can_assign_role(Role::Owner));
+    assert!(Role::Admin.can_assign_role(Role::Admin));
+    assert!(!Role::Admin.can_assign_role(Role::Undefined));
+
+    // Undefined can assign nothing
+    assert!(!Role::Undefined.can_assign_role(Role::Owner));
+    assert!(!Role::Undefined.can_assign_role(Role::Admin));
+    assert!(!Role::Undefined.can_assign_role(Role::Undefined));
+  }
+}

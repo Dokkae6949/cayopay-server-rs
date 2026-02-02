@@ -44,3 +44,27 @@ impl From<String> for HashedPassword {
     Self::new(value)
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_password_verification() {
+    let password = RawPassword::new("password123");
+    let hashed = password.hash().expect("failed to hash password");
+
+    assert!(hashed.verify(&password).expect("failed to verify password"));
+
+    let wrong_password = RawPassword::new("wrongpassword");
+    assert!(!hashed
+      .verify(&wrong_password)
+      .expect("failed to verify password"));
+  }
+
+  #[test]
+  fn test_debug_impl() {
+    let hashed = HashedPassword::new("somehash");
+    assert_eq!(format!("{:?}", hashed), "HashedPassword(***)");
+  }
+}

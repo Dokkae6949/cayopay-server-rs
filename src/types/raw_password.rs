@@ -43,3 +43,15 @@ impl From<String> for RawPassword {
     Self::new(value)
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_debug_impl() {
+    let password = RawPassword::new("mysecretpassword");
+    let debug_str = format!("{:?}", password);
+    assert_eq!(debug_str, "RawPassword(***)");
+  }
+}
