@@ -20,10 +20,10 @@ impl AuthService {
   pub async fn login(&self, email: Email, password: RawPassword) -> AppResult<User> {
     let user = UserStore::find_by_email(&self.pool, &email)
       .await?
-      .ok_or(AppError::AuthError)?;
+      .ok_or(AppError::InvalidCredentials)?;
 
     if !user.password_hash.verify(&password)? {
-      return Err(AppError::AuthError);
+      return Err(AppError::InvalidCredentials);
     }
 
     Ok(user)
@@ -36,13 +36,6 @@ impl AuthService {
     first_name: String,
     last_name: String,
   ) -> AppResult<User> {
-    if UserStore::find_by_email(&self.pool, &email)
-      .await?
-      .is_some()
-    {
-      return Err(AppError::Conflict);
-    }
-
     let user = User::new(email, password.hash()?, first_name, last_name);
     let actor = Actor::new(user.actor_id);
 

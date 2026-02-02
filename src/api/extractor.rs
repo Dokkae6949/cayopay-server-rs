@@ -25,22 +25,22 @@ impl FromRequestParts<AppState> for AuthUser {
     let jar = parts
       .extract::<CookieJar>()
       .await
-      .map_err(|_| AppError::AuthError)?;
+      .map_err(|_| AppError::InvalidCredentials)?;
 
     let session_cookie = jar
       .get(&state.config.session_cookie_name)
-      .ok_or(AppError::AuthError)?;
+      .ok_or(AppError::InvalidCredentials)?;
     let token = session_cookie.value();
 
     let session = state
       .session_service
       .validate_session(token)
       .await?
-      .ok_or(AppError::AuthError)?;
+      .ok_or(AppError::InvalidCredentials)?;
 
     let user = UserStore::find_by_id(&state.pool, &session.user_id)
       .await?
-      .ok_or(AppError::AuthError)?;
+      .ok_or(AppError::InvalidCredentials)?;
 
     Ok(AuthUser(user))
   }

@@ -1,9 +1,9 @@
-pub mod actor_store;
-pub mod invite_store;
-pub mod session_store;
-pub mod user_store;
+pub mod actor;
+pub mod invite;
+pub mod session;
+pub mod user;
 
-pub use actor_store::ActorStore;
-pub use invite_store::InviteStore;
-pub use session_store::SessionStore;
-pub use user_store::UserStore;
+pub use actor::ActorStore;
+pub use invite::InviteStore;
+pub use session::SessionStore;
+pub use user::UserStore;

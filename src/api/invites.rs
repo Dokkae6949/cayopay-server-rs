@@ -12,6 +12,19 @@ pub struct InviteRequest {
   pub email: String,
 }
 
+#[derive(serde::Deserialize, validator::Validate, utoipa::ToSchema)]
+pub struct AcceptInviteRequest {
+  #[validate(length(min = 1, max = 127))]
+  #[schema(example = "John")]
+  pub first_name: String,
+  #[validate(length(min = 1, max = 127))]
+  #[schema(example = "Doe")]
+  pub last_name: String,
+  #[validate(length(min = 8, max = 127))]
+  #[schema(example = "password123")]
+  pub password: String,
+}
+
 #[utoipa::path(
     post,
     context_path = "/api/invites",
@@ -41,6 +54,43 @@ pub async fn create_invite(
   Ok(())
 }
 
+#[utoipa::path(
+    post,
+    context_path = "/api/invites",
+    path = "/{token}/accept",
+    request_body = AcceptInviteRequest,
+    params(
+        ("token" = String, Path, description = "Invite token")
+    ),
+    responses(
+        (status = StatusCode::OK, description = "Invite accepted successfully"),
+        (status = StatusCode::BAD_REQUEST, description = "Validation error or expired invite", body = ErrorResponse),
+        (status = StatusCode::NOT_FOUND, description = "Invite not found", body = ErrorResponse),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Internal server error", body = ErrorResponse)
+    ),
+)]
+pub async fn accept_invite(
+  State(state): State<AppState>,
+  axum::extract::Path(token): axum::extract::Path<String>,
+  Json(payload): Json<AcceptInviteRequest>,
+) -> AppResult<()> {
+  payload.validate()?;
+
+  state
+    .invite_service
+    .accept_invite(
+      &token,
+      crate::types::RawPassword::new(payload.password),
+      payload.first_name,
+      payload.last_name,
+    )
+    .await?;
+
+  Ok(())
+}
+
 pub fn router() -> Router<AppState> {
-  Router::new().route("/", post(create_invite))
+  Router::new()
+    .route("/", post(create_invite))
+    .route("/:token/accept", post(accept_invite))
 }

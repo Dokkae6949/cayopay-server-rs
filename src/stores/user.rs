@@ -22,7 +22,14 @@ impl UserStore {
       user.updated_at,
     )
     .execute(&mut *executor)
-    .await?;
+    .await
+    .map_err(|e| match &e {
+      sqlx::Error::Database(db_err) => match db_err.kind() {
+        sqlx::error::ErrorKind::UniqueViolation => crate::error::AppError::UserAlreadyExists,
+        _ => crate::error::AppError::Database(e),
+      },
+      _ => crate::error::AppError::Database(e),
+    })?;
 
     Ok(())
   }

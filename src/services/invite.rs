@@ -3,11 +3,11 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-  domain::{Invite, User},
-  error::AppResult,
+  domain::{Actor, Invite, User},
+  error::{AppError, AppResult},
   services::EmailService,
-  stores::{InviteStore, UserStore},
-  types::{Email, Id},
+  stores::{ActorStore, InviteStore, UserStore},
+  types::{Email, Id, RawPassword},
 };
 
 #[derive(Clone)]
@@ -25,7 +25,12 @@ impl InviteService {
   }
 
   pub async fn create_invite(&self, created_by: Id<User>, email: Email) -> AppResult<Invite> {
-    // TODO: Check if an invite already exists for this email.
+    if UserStore::find_by_email(&self.pool, &email)
+      .await?
+      .is_some()
+    {
+      return Err(AppError::UserAlreadyExists);
+    }
 
     let token = Uuid::new_v4().to_string();
 
@@ -38,7 +43,7 @@ impl InviteService {
       created_at: Utc::now(),
     };
 
-    let invite = InviteStore::create(&self.pool, &invite).await?;
+    let invite = InviteStore::save(&self.pool, &invite).await?;
     let inviter_name = UserStore::find_by_id(&self.pool, &created_by)
       .await?
       .map(|u| format!("{} {}", u.first_name, u.last_name))
@@ -50,5 +55,39 @@ impl InviteService {
       .await?;
 
     Ok(invite)
+  }
+
+  pub async fn accept_invite(
+    &self,
+    token: &str,
+    password: RawPassword,
+    first_name: String,
+    last_name: String,
+  ) -> AppResult<User> {
+    let invite = InviteStore::find_by_token(&self.pool, token)
+      .await?
+      .ok_or(AppError::NotFound)?;
+
+    if invite.expires_at < Utc::now() {
+      return Err(AppError::InviteExpired);
+    }
+
+    let user = User::new(
+      invite.email.clone(),
+      password.hash()?,
+      first_name,
+      last_name,
+    );
+    let actor = Actor::new(user.actor_id);
+
+    let mut tx = self.pool.begin().await?;
+
+    ActorStore::save(&mut *tx, &actor).await?;
+    UserStore::save(&mut *tx, user.clone()).await?;
+    InviteStore::delete_by_id(&mut *tx, &invite.id).await?;
+
+    tx.commit().await?;
+
+    Ok(user)
   }
 }

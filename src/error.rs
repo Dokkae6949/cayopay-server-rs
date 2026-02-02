@@ -16,14 +16,20 @@ pub enum AppError {
   #[error("Validation error: {0}")]
   Validation(#[from] validator::ValidationErrors),
 
-  #[error("Authentication failed")]
-  AuthError,
+  #[error("Invalid login credentials")]
+  InvalidCredentials,
 
   #[error("Resource not found")]
   NotFound,
 
-  #[error("Resource already exists")]
-  Conflict,
+  #[error("User with this email already exists")]
+  UserAlreadyExists,
+
+  #[error("Invitation to the provided email has already been sent")]
+  InviteAlreadySent,
+
+  #[error("Invitation has expired")]
+  InviteExpired,
 
   #[error("Internal server error")]
   InternalServerError,
@@ -71,21 +77,11 @@ impl IntoResponse for AppError {
           Some(details),
         )
       }
-      AppError::AuthError => (
-        StatusCode::UNAUTHORIZED,
-        "Invalid credentials".to_string(),
-        None,
-      ),
-      AppError::NotFound => (
-        StatusCode::NOT_FOUND,
-        "Resource not found".to_string(),
-        None,
-      ),
-      AppError::Conflict => (
-        StatusCode::CONFLICT,
-        "Resource already exists".to_string(),
-        None,
-      ),
+      AppError::InvalidCredentials => (StatusCode::UNAUTHORIZED, self.to_string(), None),
+      AppError::NotFound => (StatusCode::NOT_FOUND, self.to_string(), None),
+      AppError::UserAlreadyExists => (StatusCode::CONFLICT, self.to_string(), None),
+      AppError::InviteAlreadySent => (StatusCode::CONFLICT, self.to_string(), None),
+      AppError::InviteExpired => (StatusCode::BAD_REQUEST, self.to_string(), None),
       AppError::InternalServerError => (
         StatusCode::INTERNAL_SERVER_ERROR,
         "Internal server error".to_string(),

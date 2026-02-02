@@ -1,5 +1,6 @@
 use crate::app_state::AppState;
 use axum::Router;
+use tower_http::trace::TraceLayer;
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -16,6 +17,7 @@ pub mod invites;
         auth::login,
         auth::me,
         invites::create_invite,
+        invites::accept_invite,
     ),
     components(
         schemas(
@@ -28,6 +30,7 @@ pub mod invites;
             auth::LoginRequest,
             auth::UserResponse,
             invites::InviteRequest,
+            invites::AcceptInviteRequest,
         )
     ),
     tags(
@@ -55,5 +58,6 @@ pub fn router(state: AppState) -> Router {
   Router::new()
     .merge(SwaggerUi::new("/api/docs").url("/api/docs/openapi.json", openapi))
     .nest("/api", api_router)
+    .layer(TraceLayer::new_for_http())
     .with_state(state)
 }
