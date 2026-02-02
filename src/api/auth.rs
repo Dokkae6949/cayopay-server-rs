@@ -11,9 +11,9 @@ use validator::Validate;
 
 use crate::{
   api::extractor::Authn,
-  app_state::AppState,
   domain::{Role, User},
   error::AppResult,
+  state::AppState,
   types::{Email, Id, RawPassword},
 };
 

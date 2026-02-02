@@ -5,9 +5,9 @@ use validator::Validate;
 
 use crate::{
   api::extractor::{Authz, ValidatedJson},
-  app_state::AppState,
   domain::{Permission, Role},
   error::AppResult,
+  state::AppState,
   types::Email,
 };
 

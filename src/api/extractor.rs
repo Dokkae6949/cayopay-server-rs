@@ -10,9 +10,9 @@ use std::ops::Deref;
 use validator::Validate;
 
 use crate::{
-  app_state::AppState,
   domain::{Permission, User},
   error::AppError,
+  state::AppState,
   stores::UserStore,
 };
 

@@ -5,17 +5,17 @@ use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod api;
-mod app_state;
 mod config;
 mod domain;
 mod error;
 mod services;
+mod state;
 mod stores;
 mod types;
 
-use crate::app_state::AppState;
 use crate::config::Config;
 use crate::domain::Role;
+use crate::state::AppState;
 use crate::stores::UserStore;
 use crate::types::{Email, RawPassword};
 

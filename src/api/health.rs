@@ -2,7 +2,7 @@ use axum::{response::IntoResponse, routing::get, Json, Router};
 use serde::Serialize;
 use utoipa::ToSchema;
 
-use crate::app_state::AppState;
+use crate::state::AppState;
 
 #[derive(Serialize, ToSchema)]
 pub struct HealthResponse {
