@@ -54,16 +54,16 @@ impl From<User> for UserResponse {
 }
 
 #[utoipa::path(
-    post,
-    context_path = "/api/auth",
-    path = "/login",
-    request_body = LoginRequest,
-    responses(
-        (status = StatusCode::OK, description = "Login successful", body = UserResponse),
-        (status = StatusCode::BAD_REQUEST, description = "Validation error", body = ErrorResponse),
-        (status = StatusCode::UNAUTHORIZED, description = "Invalid credentials", body = ErrorResponse),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Internal server error", body = ErrorResponse)
-    )
+  post,
+  context_path = "/api/auth",
+  path = "/login",
+  request_body = LoginRequest,
+  responses(
+    (status = StatusCode::OK, description = "Login successful", body = UserResponse),
+    (status = StatusCode::BAD_REQUEST, description = "Validation error", body = ErrorResponse),
+    (status = StatusCode::UNAUTHORIZED, description = "Invalid credentials", body = ErrorResponse),
+    (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Internal server error", body = ErrorResponse)
+  )
 )]
 pub async fn login(
   State(state): State<AppState>,
@@ -91,17 +91,17 @@ pub async fn login(
 }
 
 #[utoipa::path(
-    get,
-    context_path = "/api/auth",
-    path = "/me",
-    responses(
-        (status = StatusCode::OK, description = "Get current user successful", body = UserResponse),
-        (status = StatusCode::UNAUTHORIZED, description = "Unauthorized", body = ErrorResponse),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Internal server error", body = ErrorResponse)
-    ),
-    security(
-        ("session_cookie" = [])
-    )
+  get,
+  context_path = "/api/auth",
+  path = "/me",
+  responses(
+    (status = StatusCode::OK, description = "Get current user successful", body = UserResponse),
+    (status = StatusCode::UNAUTHORIZED, description = "Unauthorized", body = ErrorResponse),
+    (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Internal server error", body = ErrorResponse)
+  ),
+  security(
+    ("session_cookie" = [])
+  )
 )]
 pub async fn me(Authn(user): Authn) -> AppResult<Json<UserResponse>> {
   Ok(Json(user.into()))

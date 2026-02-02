@@ -17,7 +17,7 @@ pub enum AppError {
   Validation(#[from] validator::ValidationErrors),
 
   #[error("Missing or invalid credentials")]
-  InvalidCredentials,
+  Authentication,
 
   #[error("Missing or insufficient permissions")]
   Authorization,
@@ -83,7 +83,7 @@ impl IntoResponse for AppError {
           Some(details),
         )
       }
-      AppError::InvalidCredentials => (StatusCode::UNAUTHORIZED, self.to_string(), None),
+      AppError::Authentication => (StatusCode::UNAUTHORIZED, self.to_string(), None),
       AppError::Authorization => (StatusCode::FORBIDDEN, self.to_string(), None),
       AppError::NotFound => (StatusCode::NOT_FOUND, self.to_string(), None),
       AppError::UserAlreadyExists => (StatusCode::CONFLICT, self.to_string(), None),

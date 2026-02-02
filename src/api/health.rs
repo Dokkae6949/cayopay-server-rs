@@ -10,12 +10,12 @@ pub struct HealthResponse {
 }
 
 #[utoipa::path(
-    get,
-    context_path = "/api",
-    path = "/health",
-    responses(
-        (status = 200, description = "Server is healthy", body = HealthResponse)
-    )
+  get,
+  context_path = "/api",
+  path = "/health",
+  responses(
+    (status = 200, description = "Server is healthy", body = HealthResponse)
+  )
 )]
 pub async fn health_check() -> impl IntoResponse {
   Json(HealthResponse {

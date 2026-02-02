@@ -34,19 +34,20 @@ pub struct AcceptInviteRequest {
 }
 
 #[utoipa::path(
-    post,
-    context_path = "/api/invites",
-    path = "/",
-    request_body = InviteRequest,
-    responses(
-        (status = StatusCode::OK, description = "Invite sent successfully"),
-        (status = StatusCode::BAD_REQUEST, description = "Validation error", body = ErrorResponse),
-        (status = StatusCode::UNAUTHORIZED, description = "Unauthorized", body = ErrorResponse),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Internal server error", body = ErrorResponse)
-    ),
-    security(
-        ("session_cookie" = [])
-    )
+  post,
+  context_path = "/api/invites",
+  path = "/",
+  request_body = InviteRequest,
+  responses(
+    (status = StatusCode::OK, description = "Invite sent successfully"),
+    (status = StatusCode::BAD_REQUEST, description = "Validation error", body = ErrorResponse),
+    (status = StatusCode::UNAUTHORIZED, description = "Unauthorized", body = ErrorResponse),
+    (status = StatusCode::FORBIDDEN, description = "Forbidden", body = ErrorResponse),
+    (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Internal server error", body = ErrorResponse)
+  ),
+  security(
+    ("session_cookie" = [])
+  )
 )]
 pub async fn create_invite(
   State(state): State<AppState>,
@@ -68,19 +69,19 @@ pub async fn create_invite(
 }
 
 #[utoipa::path(
-    post,
-    context_path = "/api/invites",
-    path = "/{token}/accept",
-    request_body = AcceptInviteRequest,
-    params(
-        ("token" = String, Path, description = "Invite token")
-    ),
-    responses(
-        (status = StatusCode::OK, description = "Invite accepted successfully"),
-        (status = StatusCode::BAD_REQUEST, description = "Validation error or expired invite", body = ErrorResponse),
-        (status = StatusCode::NOT_FOUND, description = "Invite not found", body = ErrorResponse),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Internal server error", body = ErrorResponse)
-    ),
+  post,
+  context_path = "/api/invites",
+  path = "/{token}/accept",
+  request_body = AcceptInviteRequest,
+  params(
+    ("token" = String, Path, description = "Invite token")
+  ),
+  responses(
+    (status = StatusCode::OK, description = "Invite accepted successfully"),
+    (status = StatusCode::BAD_REQUEST, description = "Validation error or expired invite", body = ErrorResponse),
+    (status = StatusCode::NOT_FOUND, description = "Invite not found", body = ErrorResponse),
+    (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Internal server error", body = ErrorResponse)
+  ),
 )]
 pub async fn accept_invite(
   State(state): State<AppState>,

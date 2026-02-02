@@ -20,10 +20,10 @@ impl AuthService {
   pub async fn login(&self, email: Email, password: RawPassword) -> AppResult<User> {
     let user = UserStore::find_by_email(&self.pool, &email)
       .await?
-      .ok_or(AppError::InvalidCredentials)?;
+      .ok_or(AppError::Authentication)?;
 
     if !user.password_hash.verify(&password)? {
-      return Err(AppError::InvalidCredentials);
+      return Err(AppError::Authentication);
     }
 
     Ok(user)

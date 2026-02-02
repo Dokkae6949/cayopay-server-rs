@@ -24,13 +24,16 @@ pub mod invites;
     components(
         schemas(
             crate::error::ErrorResponse,
-            crate::types::Id<crate::domain::User>,
+            crate::types::Id<()>,
             crate::types::Email,
             crate::types::RawPassword,
             crate::types::HashedPassword,
+            crate::domain::role::Role,
             crate::domain::actor::Actor,
             crate::domain::guest::Guest,
-            crate::domain::actor::ActorDetailResponse,
+            actor::ActorResponse,
+            actor::UserActorResponse,
+            actor::GuestActorResponse,
             health::HealthResponse,
             auth::LoginRequest,
             auth::UserResponse,

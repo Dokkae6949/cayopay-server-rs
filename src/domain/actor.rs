@@ -24,9 +24,8 @@ impl Actor {
   }
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct ActorDetailResponse {
-  #[serde(flatten)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ActorWithDetails {
   pub actor: Actor,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub user: Option<User>,

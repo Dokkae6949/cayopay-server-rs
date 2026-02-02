@@ -1,6 +1,6 @@
 use sqlx::{Executor, Postgres};
 
-use crate::domain::actor::{Actor, ActorDetailResponse};
+use crate::domain::actor::{Actor, ActorWithDetails};
 use crate::error::AppResult;
 use crate::types::Id;
 
@@ -45,7 +45,7 @@ impl ActorStore {
     Ok(actor)
   }
 
-  pub async fn list_all_detailed<'c, E>(executor: E) -> AppResult<Vec<ActorDetailResponse>>
+  pub async fn list_all_detailed<'c, E>(executor: E) -> AppResult<Vec<ActorWithDetails>>
   where
     E: Executor<'c, Database = Postgres>,
   {
@@ -122,7 +122,7 @@ impl ActorStore {
           None
         };
 
-        ActorDetailResponse {
+        ActorWithDetails {
           actor: Actor {
             id: Id::from(row.actor_id),
             created_at: row.actor_created_at,
