@@ -5,6 +5,7 @@ use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+pub mod actor;
 pub mod auth;
 pub mod extractor;
 pub mod health;
@@ -18,6 +19,7 @@ pub mod invites;
         auth::me,
         invites::create_invite,
         invites::accept_invite,
+        actor::list_actors,
     ),
     components(
         schemas(
@@ -26,6 +28,9 @@ pub mod invites;
             crate::types::Email,
             crate::types::RawPassword,
             crate::types::HashedPassword,
+            crate::domain::actor::Actor,
+            crate::domain::guest::Guest,
+            crate::domain::actor::ActorDetailResponse,
             health::HealthResponse,
             auth::LoginRequest,
             auth::UserResponse,
@@ -62,7 +67,8 @@ pub fn router(state: AppState) -> Router {
   let api_router = Router::new()
     .merge(health::router())
     .nest("/auth", auth::router())
-    .nest("/invites", invites::router());
+    .nest("/invites", invites::router())
+    .nest("/actors", actor::router());
 
   Router::new()
     .merge(SwaggerUi::new("/api/docs").url("/api/docs/openapi.json", openapi))

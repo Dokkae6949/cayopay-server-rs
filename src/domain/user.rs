@@ -23,6 +23,7 @@ pub struct User {
 
 impl User {
   pub fn new(
+    actor_id: Id<Actor>,
     email: Email,
     password_hash: HashedPassword,
     first_name: impl Into<String>,
@@ -32,7 +33,7 @@ impl User {
     let now = Utc::now();
     Self {
       id: Id::new(),
-      actor_id: Id::new(),
+      actor_id,
       email,
       first_name: first_name.into(),
       last_name: last_name.into(),

@@ -11,17 +11,19 @@ pub struct AppState {
   pub auth_service: AuthService,
   pub session_service: SessionService,
   pub invite_service: InviteService,
-  pub pool: PgPool, // Kept for health check or other raw db needs
+  pub pool: PgPool,
 }
 
 impl AppState {
   pub fn new(config: &Config, pool: PgPool) -> Self {
+    let auth_service = AuthService::new(pool.clone());
     let email_service = EmailService::new(config);
-    let invite_service = InviteService::new(pool.clone(), email_service);
+    let invite_service =
+      InviteService::new(pool.clone(), email_service.clone(), auth_service.clone());
 
     Self {
       config: config.clone(),
-      auth_service: AuthService::new(pool.clone()),
+      auth_service,
       session_service: SessionService::new(pool.clone(), config.session_expiration_days),
       invite_service,
       pool,

@@ -7,6 +7,7 @@ pub enum Permission {
   ConfigureSettings,
 
   InviteUsers,
+  ViewAllActors,
 }
 
 #[derive(
@@ -46,8 +47,12 @@ impl From<String> for Role {
 impl Role {
   pub fn permissions(&self) -> Vec<Permission> {
     match self {
-      Role::Owner => vec![Permission::ConfigureSettings, Permission::InviteUsers],
-      Role::Admin => vec![Permission::InviteUsers],
+      Role::Owner => vec![
+        Permission::ConfigureSettings,
+        Permission::InviteUsers,
+        Permission::ViewAllActors,
+      ],
+      Role::Admin => vec![Permission::InviteUsers, Permission::ViewAllActors],
       Role::Undefined => vec![],
     }
   }

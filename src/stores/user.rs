@@ -6,7 +6,10 @@ use sqlx::{Executor, PgConnection, Postgres};
 pub struct UserStore;
 
 impl UserStore {
-  pub async fn save(executor: &mut PgConnection, user: User) -> AppResult<()> {
+  pub async fn save<'c, E>(executor: E, user: &User) -> AppResult<()>
+  where
+    E: Executor<'c, Database = Postgres>,
+  {
     sqlx::query!(
       r#"
       INSERT INTO users (id, actor_id, email, password_hash, first_name, last_name, role, created_at, updated_at)
@@ -22,7 +25,7 @@ impl UserStore {
       user.created_at,
       user.updated_at,
     )
-    .execute(&mut *executor)
+    .execute(executor)
     .await
     .map_err(|e| match &e {
       sqlx::Error::Database(db_err) => match db_err.kind() {

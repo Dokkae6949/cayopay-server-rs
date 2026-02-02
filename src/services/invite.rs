@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{
   domain::{Actor, Invite, Role, User},
   error::{AppError, AppResult},
-  services::EmailService,
+  services::{auth::AuthService, EmailService},
   stores::{ActorStore, InviteStore, UserStore},
   types::{Email, Id, RawPassword},
 };
@@ -14,13 +14,15 @@ use crate::{
 pub struct InviteService {
   pool: PgPool,
   email_service: EmailService,
+  auth_service: AuthService,
 }
 
 impl InviteService {
-  pub fn new(pool: PgPool, email_service: EmailService) -> Self {
+  pub fn new(pool: PgPool, email_service: EmailService, auth_service: AuthService) -> Self {
     Self {
       pool,
       email_service,
+      auth_service,
     }
   }
 
@@ -80,22 +82,18 @@ impl InviteService {
       return Err(AppError::InviteExpired);
     }
 
-    let user = User::new(
-      invite.email.clone(),
-      password.hash()?,
-      first_name,
-      last_name,
-      invite.role,
-    );
-    let actor = Actor::new(user.actor_id);
+    let user = self
+      .auth_service
+      .register(
+        invite.email.clone(),
+        password,
+        first_name,
+        last_name,
+        invite.role,
+      )
+      .await?;
 
-    let mut tx = self.pool.begin().await?;
-
-    ActorStore::save(&mut *tx, &actor).await?;
-    UserStore::save(&mut *tx, user.clone()).await?;
-    InviteStore::delete_by_id(&mut *tx, &invite.id).await?;
-
-    tx.commit().await?;
+    InviteStore::delete_by_id(&self.pool, &invite.id).await?;
 
     Ok(user)
   }
