@@ -1,6 +1,10 @@
 use sqlx::{Executor, Postgres};
 
-use crate::{domain::Invite, error::AppResult, types::Id};
+use crate::{
+  domain::Invite,
+  error::AppResult,
+  types::{Email, Id},
+};
 
 pub struct InviteStore;
 
@@ -66,6 +70,28 @@ impl InviteStore {
       WHERE id = $1
       "#,
       id.into_inner()
+    )
+    .execute(executor)
+    .await?;
+
+    Ok(())
+  }
+
+  pub async fn delete_expired_by_email<'c, E>(
+    executor: E,
+    email: &Email,
+    now: chrono::DateTime<chrono::Utc>,
+  ) -> AppResult<()>
+  where
+    E: Executor<'c, Database = Postgres>,
+  {
+    sqlx::query!(
+      r#"
+      DELETE FROM invites
+      WHERE email = $1 AND expires_at < $2
+      "#,
+      email.expose(),
+      now
     )
     .execute(executor)
     .await?;

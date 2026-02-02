@@ -10,7 +10,7 @@ use utoipa::ToSchema;
 use validator::Validate;
 
 use crate::{
-  api::extractor::Authn,
+  api::extractor::{Authn, ValidatedJson},
   domain::{Role, User},
   error::AppResult,
   state::AppState,
@@ -68,10 +68,8 @@ impl From<User> for UserResponse {
 pub async fn login(
   State(state): State<AppState>,
   jar: CookieJar,
-  Json(payload): Json<LoginRequest>,
+  ValidatedJson(payload): ValidatedJson<LoginRequest>,
 ) -> AppResult<(CookieJar, Json<UserResponse>)> {
-  payload.validate()?;
-
   let email = Email::new(payload.email);
   let password = RawPassword::new(payload.password);
 

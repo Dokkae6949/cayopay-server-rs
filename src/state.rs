@@ -22,7 +22,7 @@ impl AppState {
     Self {
       config: config.clone(),
       auth_service: AuthService::new(pool.clone()),
-      session_service: SessionService::new(pool.clone()),
+      session_service: SessionService::new(pool.clone(), config.session_expiration_days),
       invite_service,
       pool,
     }

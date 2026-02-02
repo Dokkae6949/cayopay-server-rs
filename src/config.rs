@@ -19,6 +19,9 @@ pub struct Config {
 
   #[serde(default = "default_session_cookie_name")]
   pub session_cookie_name: String,
+
+  #[serde(default = "default_session_expiration_days")]
+  pub session_expiration_days: i64,
 }
 
 fn default_host() -> String {
@@ -31,6 +34,10 @@ fn default_port() -> u16 {
 
 fn default_session_cookie_name() -> String {
   "cayopay_session".to_string()
+}
+
+fn default_session_expiration_days() -> i64 {
+  1
 }
 
 impl Config {

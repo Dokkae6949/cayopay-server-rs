@@ -57,9 +57,10 @@ impl Role {
   }
 
   pub fn can_assign_role(&self, target_role: Role) -> bool {
-    let my_perms = self.permissions();
-    let target_perms = target_role.permissions();
-
-    target_perms.iter().all(|p| my_perms.contains(p))
+    match self {
+      Role::Owner => matches!(target_role, Role::Owner | Role::Admin),
+      Role::Admin => matches!(target_role, Role::Admin),
+      Role::Undefined => false,
+    }
   }
 }

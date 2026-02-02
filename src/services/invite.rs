@@ -37,6 +37,8 @@ impl InviteService {
       return Err(AppError::UserAlreadyExists);
     }
 
+    InviteStore::delete_expired_by_email(&self.pool, &email, Utc::now()).await?;
+
     let token = Uuid::new_v4().to_string();
 
     let invite = Invite {

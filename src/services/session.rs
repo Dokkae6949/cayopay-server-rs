@@ -12,17 +12,21 @@ use crate::{
 #[derive(Clone)]
 pub struct SessionService {
   pool: PgPool,
+  session_expiration_days: i64,
 }
 
 impl SessionService {
-  pub fn new(pool: PgPool) -> Self {
-    Self { pool }
+  pub fn new(pool: PgPool, session_expiration_days: i64) -> Self {
+    Self {
+      pool,
+      session_expiration_days,
+    }
   }
 
   pub async fn create_session(&self, user_id: Id<User>) -> AppResult<Session> {
     let token = Uuid::new_v4().to_string();
-    // TODO: Refactor expiration into app config
-    let expires_at = Utc::now() + Duration::try_days(1).unwrap();
+    let expires_at = Utc::now()
+      + Duration::try_days(self.session_expiration_days).unwrap_or(Duration::try_days(1).unwrap());
     let session = Session::new(token, user_id, expires_at);
 
     SessionStore::save(&self.pool, &session).await?;
