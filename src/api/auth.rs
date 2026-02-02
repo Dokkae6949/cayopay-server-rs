@@ -10,9 +10,9 @@ use utoipa::ToSchema;
 use validator::Validate;
 
 use crate::{
-  api::extractor::AuthUser,
+  api::extractor::Authn,
   app_state::AppState,
-  domain::User,
+  domain::{Role, User},
   error::AppResult,
   types::{Email, Id, RawPassword},
 };
@@ -34,6 +34,7 @@ pub struct UserResponse {
   pub email: Email,
   pub first_name: String,
   pub last_name: String,
+  pub role: Role,
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
 }
@@ -45,6 +46,7 @@ impl From<User> for UserResponse {
       email: user.email,
       first_name: user.first_name,
       last_name: user.last_name,
+      role: user.role,
       created_at: user.created_at,
       updated_at: user.updated_at,
     }
@@ -103,7 +105,7 @@ pub async fn login(
         ("session_cookie" = [])
     )
 )]
-pub async fn me(AuthUser(user): AuthUser) -> AppResult<Json<UserResponse>> {
+pub async fn me(Authn(user): Authn) -> AppResult<Json<UserResponse>> {
   Ok(Json(user.into()))
 }
 

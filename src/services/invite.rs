@@ -3,7 +3,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-  domain::{Actor, Invite, User},
+  domain::{Actor, Invite, Role, User},
   error::{AppError, AppResult},
   services::EmailService,
   stores::{ActorStore, InviteStore, UserStore},
@@ -24,7 +24,12 @@ impl InviteService {
     }
   }
 
-  pub async fn create_invite(&self, created_by: Id<User>, email: Email) -> AppResult<Invite> {
+  pub async fn create_invite(
+    &self,
+    created_by: Id<User>,
+    email: Email,
+    role: Role,
+  ) -> AppResult<Invite> {
     if UserStore::find_by_email(&self.pool, &email)
       .await?
       .is_some()
@@ -39,6 +44,7 @@ impl InviteService {
       created_by,
       email: email.clone(),
       token: token.clone(),
+      role,
       expires_at: Utc::now() + Duration::days(7),
       created_at: Utc::now(),
     };
@@ -77,6 +83,7 @@ impl InviteService {
       password.hash()?,
       first_name,
       last_name,
+      invite.role,
     );
     let actor = Actor::new(user.actor_id);
 

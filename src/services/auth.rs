@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 
 use crate::{
-  domain::{Actor, User},
+  domain::{Actor, Role, User},
   error::{AppError, AppResult},
   stores::{ActorStore, UserStore},
   types::{Email, RawPassword},
@@ -35,8 +35,9 @@ impl AuthService {
     password: RawPassword,
     first_name: String,
     last_name: String,
+    role: Role,
   ) -> AppResult<User> {
-    let user = User::new(email, password.hash()?, first_name, last_name);
+    let user = User::new(email, password.hash()?, first_name, last_name, role);
     let actor = Actor::new(user.actor_id);
 
     let mut tx = self.pool.begin().await?;

@@ -9,8 +9,8 @@ impl UserStore {
   pub async fn save(executor: &mut PgConnection, user: User) -> AppResult<()> {
     sqlx::query!(
       r#"
-      INSERT INTO users (id, actor_id, email, password_hash, first_name, last_name, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO users (id, actor_id, email, password_hash, first_name, last_name, role, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       "#,
       user.id.into_inner(),
       user.actor_id.into_inner(),
@@ -18,6 +18,7 @@ impl UserStore {
       user.password_hash.expose(),
       user.first_name,
       user.last_name,
+      user.role.to_string(),
       user.created_at,
       user.updated_at,
     )
@@ -41,7 +42,7 @@ impl UserStore {
     let user = sqlx::query_as!(
       User,
       r#"
-      SELECT id, actor_id, email, password_hash, first_name, last_name, created_at, updated_at
+      SELECT id, actor_id, email, password_hash, first_name, last_name, role, created_at, updated_at
       FROM users
       WHERE id = $1
       "#,
@@ -60,7 +61,7 @@ impl UserStore {
     let user = sqlx::query_as!(
       User,
       r#"
-      SELECT id, actor_id, email, password_hash, first_name, last_name, created_at, updated_at
+      SELECT id, actor_id, email, password_hash, first_name, last_name, role, created_at, updated_at
       FROM users
       WHERE email = $1
       "#,

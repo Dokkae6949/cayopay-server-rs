@@ -16,8 +16,11 @@ pub enum AppError {
   #[error("Validation error: {0}")]
   Validation(#[from] validator::ValidationErrors),
 
-  #[error("Invalid login credentials")]
+  #[error("Missing or invalid credentials")]
   InvalidCredentials,
+
+  #[error("Missing or insufficient permissions")]
+  Authorization,
 
   #[error("Resource not found")]
   NotFound,
@@ -30,6 +33,9 @@ pub enum AppError {
 
   #[error("Invitation has expired")]
   InviteExpired,
+
+  #[error("Bad request: {0}")]
+  BadRequest(String),
 
   #[error("Internal server error")]
   InternalServerError,
@@ -78,10 +84,12 @@ impl IntoResponse for AppError {
         )
       }
       AppError::InvalidCredentials => (StatusCode::UNAUTHORIZED, self.to_string(), None),
+      AppError::Authorization => (StatusCode::FORBIDDEN, self.to_string(), None),
       AppError::NotFound => (StatusCode::NOT_FOUND, self.to_string(), None),
       AppError::UserAlreadyExists => (StatusCode::CONFLICT, self.to_string(), None),
       AppError::InviteAlreadySent => (StatusCode::CONFLICT, self.to_string(), None),
       AppError::InviteExpired => (StatusCode::BAD_REQUEST, self.to_string(), None),
+      AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg, None),
       AppError::InternalServerError => (
         StatusCode::INTERNAL_SERVER_ERROR,
         "Internal server error".to_string(),

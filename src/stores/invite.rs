@@ -12,14 +12,15 @@ impl InviteStore {
     let invite = sqlx::query_as!(
       Invite,
       r#"
-      INSERT INTO invites (id, created_by, email, token, expires_at, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, created_by, email, token, expires_at, created_at
+      INSERT INTO invites (id, created_by, email, token, role, expires_at, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, created_by, email, token, role, expires_at, created_at
       "#,
       invite.id.into_inner(),
       invite.created_by.into_inner(),
       invite.email.expose(),
       invite.token,
+      invite.role.to_string(),
       invite.expires_at,
       invite.created_at
     )
@@ -43,7 +44,7 @@ impl InviteStore {
     let invite = sqlx::query_as!(
       Invite,
       r#"
-      SELECT id, created_by, email, token, expires_at, created_at
+      SELECT id, created_by, email, token, role, expires_at, created_at
       FROM invites
       WHERE token = $1
       "#,

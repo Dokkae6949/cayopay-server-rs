@@ -3,13 +3,21 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use validator::Validate;
 
-use crate::{api::extractor::AuthUser, app_state::AppState, error::AppResult, types::Email};
+use crate::{
+  api::extractor::{Authz, ValidatedJson},
+  app_state::AppState,
+  domain::{Permission, Role},
+  error::AppResult,
+  types::Email,
+};
 
 #[derive(Deserialize, Validate, ToSchema)]
 pub struct InviteRequest {
   #[validate(email)]
   #[schema(example = "friend@example.com")]
   pub email: String,
+
+  pub role: Role,
 }
 
 #[derive(serde::Deserialize, validator::Validate, utoipa::ToSchema)]
@@ -42,14 +50,19 @@ pub struct AcceptInviteRequest {
 )]
 pub async fn create_invite(
   State(state): State<AppState>,
-  AuthUser(user): AuthUser,
-  Json(payload): Json<InviteRequest>,
+  authz: Authz,
+  ValidatedJson(payload): ValidatedJson<InviteRequest>,
 ) -> AppResult<()> {
-  payload.validate()?;
+  authz.require(Permission::InviteUsers)?;
+  authz.can_assign(payload.role)?;
 
   let email = Email::new(payload.email);
+  let user = authz.0;
 
-  state.invite_service.create_invite(user.id, email).await?;
+  state
+    .invite_service
+    .create_invite(user.id, email, payload.role)
+    .await?;
 
   Ok(())
 }
@@ -72,10 +85,8 @@ pub async fn create_invite(
 pub async fn accept_invite(
   State(state): State<AppState>,
   axum::extract::Path(token): axum::extract::Path<String>,
-  Json(payload): Json<AcceptInviteRequest>,
+  ValidatedJson(payload): ValidatedJson<AcceptInviteRequest>,
 ) -> AppResult<()> {
-  payload.validate()?;
-
   state
     .invite_service
     .accept_invite(

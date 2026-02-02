@@ -4,6 +4,7 @@ use sqlx::FromRow;
 use utoipa::ToSchema;
 
 use crate::domain::Actor;
+use crate::domain::Role;
 use crate::types::{Email, HashedPassword, Id};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
@@ -15,6 +16,7 @@ pub struct User {
   pub password_hash: HashedPassword,
   pub first_name: String,
   pub last_name: String,
+  pub role: Role,
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
 }
@@ -25,6 +27,7 @@ impl User {
     password_hash: HashedPassword,
     first_name: impl Into<String>,
     last_name: impl Into<String>,
+    role: Role,
   ) -> Self {
     let now = Utc::now();
     Self {
@@ -34,6 +37,7 @@ impl User {
       first_name: first_name.into(),
       last_name: last_name.into(),
       password_hash,
+      role: role,
       created_at: now,
       updated_at: now,
     }

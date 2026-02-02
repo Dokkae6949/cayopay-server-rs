@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -13,6 +15,7 @@ mod types;
 
 use crate::app_state::AppState;
 use crate::config::Config;
+use crate::domain::Role;
 use crate::stores::UserStore;
 use crate::types::{Email, RawPassword};
 
@@ -44,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   let email = Email::new("a@b.c");
   if UserStore::find_by_email(&pool, &email).await?.is_none() {
-    tracing::info!("Seeding default admin user (a@b.c / password)");
+    tracing::info!("Seeding default owner user (a@b.c / password)");
     state
       .auth_service
       .register(
@@ -52,6 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         RawPassword::new("password"),
         "Nimda".to_string(),
         "Admin".to_string(),
+        Role::Owner,
       )
       .await?;
   }
