@@ -28,8 +28,8 @@ impl EmailService {
     );
 
     let creds = Credentials::new(
-      config.smtp_username.clone().expose().to_string(),
-      config.smtp_password.clone().expose().to_string(),
+      config.smtp_username.clone(),
+      config.smtp_password.clone(),
     );
 
     let mut mailer_builder = AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)

@@ -1,9 +1,12 @@
 use crate::domain::Role;
 use crate::state::AppState;
 use crate::stores::UserStore;
+use crate::types::{Email, RawPassword};
 
 pub async fn seed_database(state: &AppState) -> Result<(), Box<dyn std::error::Error>> {
-  if UserStore::find_by_email(&state.pool, &state.config.owner_email)
+  let owner_email = Email::new(&state.config.owner_email);
+
+  if UserStore::find_by_email(&state.pool, &owner_email)
     .await?
     .is_none()
   {
@@ -11,8 +14,8 @@ pub async fn seed_database(state: &AppState) -> Result<(), Box<dyn std::error::E
     state
       .auth_service
       .register(
-        state.config.owner_email.clone(),
-        state.config.owner_password.clone(),
+        owner_email,
+        RawPassword::new(&state.config.owner_password),
         state.config.owner_first_name.clone(),
         state.config.owner_last_name.clone(),
         Role::Owner,
