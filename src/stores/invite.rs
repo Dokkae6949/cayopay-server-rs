@@ -13,7 +13,7 @@ impl InviteStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let invite = sqlx::query_as!(
+    let result = sqlx::query_as!(
       Invite,
       r#"
       INSERT INTO invites (id, created_by, email, token, role, expires_at, created_at)
@@ -29,16 +29,18 @@ impl InviteStore {
       invite.created_at
     )
     .fetch_one(executor)
-    .await
-    .map_err(|e| match &e {
-      sqlx::Error::Database(db_err) => match db_err.kind() {
-        sqlx::error::ErrorKind::UniqueViolation => crate::error::AppError::InviteAlreadySent,
-        _ => crate::error::AppError::Database(e),
-      },
-      _ => crate::error::AppError::Database(e),
-    })?;
+    .await;
 
-    Ok(invite)
+    match result {
+      Ok(invite) => Ok(invite),
+      Err(e) => Err(match &e {
+        sqlx::Error::Database(db_err) => match db_err.kind() {
+          sqlx::error::ErrorKind::UniqueViolation => crate::error::AppError::InviteAlreadySent,
+          _ => crate::error::AppError::Database(e),
+        },
+        _ => crate::error::AppError::Database(e),
+      }),
+    }
   }
 
   pub async fn find_by_token<'c, E>(executor: E, token: &str) -> AppResult<Option<Invite>>

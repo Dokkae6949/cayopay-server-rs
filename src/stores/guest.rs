@@ -5,7 +5,10 @@ use sqlx::{Executor, PgConnection, Postgres};
 pub struct GuestStore;
 
 impl GuestStore {
-  pub async fn save(executor: &mut PgConnection, guest: Guest) -> AppResult<()> {
+  pub async fn save<'c, E>(executor: E, guest: &Guest) -> AppResult<()>
+  where
+    E: Executor<'c, Database = Postgres>,
+  {
     sqlx::query!(
       r#"
       INSERT INTO guests (id, actor_id)
@@ -14,9 +17,8 @@ impl GuestStore {
       guest.id.into_inner(),
       guest.actor_id.into_inner(),
     )
-    .execute(&mut *executor)
-    .await
-    .map_err(crate::error::AppError::Database)?;
+    .execute(executor)
+    .await?;
 
     Ok(())
   }

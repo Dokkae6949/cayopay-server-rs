@@ -11,7 +11,7 @@ use crate::{
     extractor::{Authn, ValidatedJson},
     models::{LoginRequest, UserResponse},
   },
-  error::{AppResult, ErrorResponse},
+  error::{AppError, AppResult, ErrorResponse},
   state::AppState,
   types::{Email, RawPassword},
 };
@@ -39,15 +39,17 @@ pub async fn login(
   let user = state.auth_service.login(email, password).await?;
   let session = state.session_service.create_session(user.id).await?;
 
-  // TODO: Control cookie attributes based on environment (e.g., Secure in production)
+  let expires_at = time::OffsetDateTime::from_unix_timestamp(session.expires_at.timestamp())
+    .map_err(|e| {
+      tracing::error!("Failed to convert session expiration timestamp: {}", e);
+      AppError::InternalServerError
+    })?;
+
   let cookie = Cookie::build((state.config.session_cookie_name.clone(), session.token))
     .path("/")
     .http_only(true)
     .same_site(SameSite::Strict)
-    .expires(cookie::Expiration::DateTime(
-      time::OffsetDateTime::from_unix_timestamp(session.expires_at.timestamp())
-        .expect("timestamp should have been valid"),
-    ))
+    .expires(cookie::Expiration::DateTime(expires_at))
     .build();
 
   Ok((jar.add(cookie), Json(user.into())))

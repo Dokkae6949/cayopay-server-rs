@@ -21,8 +21,7 @@ impl WalletStore {
       wallet.updated_at,
     )
     .execute(executor)
-    .await
-    .map_err(crate::error::AppError::Database)?;
+    .await?;
 
     Ok(())
   }
