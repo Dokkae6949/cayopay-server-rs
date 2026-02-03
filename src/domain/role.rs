@@ -6,10 +6,15 @@ use utoipa::ToSchema;
 pub enum Permission {
   ConfigureSettings,
 
+  RemoveActor,
+  ReadActorDetails,
+
   InviteUser,
   RemoveUser,
-
   ReadUserDetails,
+
+  RemoveGuest,
+  ReadGuestDetails,
 }
 
 #[derive(
@@ -51,14 +56,22 @@ impl Role {
     match self {
       Role::Owner => vec![
         Permission::ConfigureSettings,
+        Permission::RemoveActor,
+        Permission::ReadActorDetails,
         Permission::InviteUser,
         Permission::RemoveUser,
         Permission::ReadUserDetails,
+        Permission::RemoveGuest,
+        Permission::ReadGuestDetails,
       ],
       Role::Admin => vec![
+        Permission::RemoveActor,
+        Permission::ReadActorDetails,
         Permission::InviteUser,
         Permission::RemoveUser,
         Permission::ReadUserDetails,
+        Permission::RemoveGuest,
+        Permission::ReadGuestDetails,
       ],
       Role::Undefined => vec![],
     }
