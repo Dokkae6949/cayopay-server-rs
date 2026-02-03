@@ -1,6 +1,9 @@
 use crate::error::AppResult;
 use crate::types::Email;
-use crate::{domain::User, types::Id};
+use crate::{
+  domain::{Actor, User},
+  types::Id,
+};
 use sqlx::{Executor, PgConnection, Postgres};
 
 pub struct UserStore;
@@ -74,5 +77,58 @@ impl UserStore {
     .await?;
 
     Ok(user)
+  }
+
+  pub async fn find_by_actor_id<'c, E>(executor: E, actor_id: &Id<Actor>) -> AppResult<Option<User>>
+  where
+    E: Executor<'c, Database = Postgres>,
+  {
+    let user = sqlx::query_as!(
+      User,
+      r#"
+      SELECT id, actor_id, email, password_hash, first_name, last_name, role, created_at, updated_at
+      FROM users
+      WHERE actor_id = $1
+      "#,
+      actor_id.into_inner()
+    )
+    .fetch_optional(executor)
+    .await?;
+
+    Ok(user)
+  }
+
+  pub async fn list_all<'c, E>(executor: E) -> AppResult<Vec<User>>
+  where
+    E: Executor<'c, Database = Postgres>,
+  {
+    let users = sqlx::query_as!(
+      User,
+      r#"
+      SELECT id, actor_id, email, password_hash, first_name, last_name, role, created_at, updated_at
+      FROM users
+      "#
+    )
+    .fetch_all(executor)
+    .await?;
+
+    Ok(users)
+  }
+
+  pub async fn remove_by_id<'c, E>(executor: E, id: &Id<User>) -> AppResult<()>
+  where
+    E: Executor<'c, Database = Postgres>,
+  {
+    sqlx::query!(
+      r#"
+      DELETE FROM users
+      WHERE id = $1
+      "#,
+      id.into_inner()
+    )
+    .execute(executor)
+    .await?;
+
+    Ok(())
   }
 }

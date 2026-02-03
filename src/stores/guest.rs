@@ -42,4 +42,38 @@ impl GuestStore {
 
     Ok(guest)
   }
+
+  pub async fn list_all<'c, E>(executor: E) -> AppResult<Vec<Guest>>
+  where
+    E: Executor<'c, Database = Postgres>,
+  {
+    let guests = sqlx::query_as!(
+      Guest,
+      r#"
+      SELECT id, actor_id
+      FROM guests
+      "#
+    )
+    .fetch_all(executor)
+    .await?;
+
+    Ok(guests)
+  }
+
+  pub async fn remove_by_id<'c, E>(executor: E, id: &Id<Guest>) -> AppResult<()>
+  where
+    E: Executor<'c, Database = Postgres>,
+  {
+    sqlx::query!(
+      r#"
+      DELETE FROM guests
+      WHERE id = $1
+      "#,
+      id.into_inner()
+    )
+    .execute(executor)
+    .await?;
+
+    Ok(())
+  }
 }

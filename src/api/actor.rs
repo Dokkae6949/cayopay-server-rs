@@ -79,10 +79,25 @@ pub async fn list_actors(
   State(state): State<AppState>,
   authz: Authz,
 ) -> AppResult<Json<Vec<ActorResponse>>> {
-  authz.require(Permission::ReadUserDetails)?;
+  authz.require(Permission::ReadActorDetails)?;
+
+  let can_read_user = authz.require(Permission::ReadUserDetails).is_ok();
+  let can_read_guest = authz.require(Permission::ReadGuestDetails).is_ok();
 
   let actors = state.actor_service.list_actors().await?;
-  let response: Vec<ActorResponse> = actors.into_iter().map(Into::into).collect();
+  let response: Vec<ActorResponse> = actors
+    .into_iter()
+    .map(|details| {
+      let mut resp = ActorResponse::from(details);
+      if !can_read_user {
+        resp.user = None;
+      }
+      if !can_read_guest {
+        resp.guest = None;
+      }
+      resp
+    })
+    .collect();
 
   Ok(Json(response))
 }
@@ -104,13 +119,25 @@ pub async fn get_actor(
   authz: Authz,
   Path(actor_id): Path<Id<Actor>>,
 ) -> AppResult<Json<ActorResponse>> {
-  authz.require(Permission::ReadUserDetails)?;
+  authz.require(Permission::ReadActorDetails)?;
+
+  let can_read_user = authz.require(Permission::ReadUserDetails).is_ok();
+  let can_read_guest = authz.require(Permission::ReadGuestDetails).is_ok();
 
   let actor = state
     .actor_service
     .get_actor_by_id(&actor_id)
     .await?
-    .map(ActorResponse::from)
+    .map(|details| {
+      let mut resp = ActorResponse::from(details);
+      if !can_read_user {
+        resp.user = None;
+      }
+      if !can_read_guest {
+        resp.guest = None;
+      }
+      resp
+    })
     .ok_or_else(|| AppError::NotFound)?;
 
   Ok(Json(actor))
@@ -134,7 +161,7 @@ pub async fn remove_actors(
   authz: Authz,
   Path(actor_id): Path<Id<Actor>>,
 ) -> AppResult<StatusCode> {
-  authz.require(Permission::RemoveUser)?;
+  authz.require(Permission::RemoveActor)?;
 
   state.actor_service.remove_by_id(actor_id).await?;
 

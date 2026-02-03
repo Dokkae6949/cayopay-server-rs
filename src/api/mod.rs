@@ -8,8 +8,10 @@ use utoipa_swagger_ui::SwaggerUi;
 pub mod actor;
 pub mod auth;
 pub mod extractor;
+pub mod guest;
 pub mod health;
 pub mod invites;
+pub mod user;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -22,6 +24,10 @@ pub mod invites;
         actor::list_actors,
         actor::get_actor,
         actor::remove_actors,
+        user::list_users,
+        user::remove_user,
+        guest::list_guests,
+        guest::remove_guest,
     ),
     components(
         schemas(
@@ -39,6 +45,8 @@ pub mod invites;
             auth::UserResponse,
             invites::InviteRequest,
             invites::AcceptInviteRequest,
+            user::UserResponse,
+            guest::GuestResponse,
         )
     ),
     tags(
@@ -71,7 +79,9 @@ pub fn router(state: AppState) -> Router {
     .merge(health::router())
     .nest("/auth", auth::router())
     .nest("/invites", invites::router())
-    .nest("/actors", actor::router());
+    .nest("/actors", actor::router())
+    .nest("/users", user::router())
+    .nest("/guests", guest::router());
 
   Router::new()
     .merge(SwaggerUi::new("/api/docs").url("/api/docs/openapi.json", openapi))
