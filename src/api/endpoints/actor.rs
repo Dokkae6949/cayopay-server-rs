@@ -12,6 +12,16 @@ use axum::{
   Json, Router,
 };
 
+fn filter_actor_response(mut response: ActorResponse, authz: &Authz) -> ActorResponse {
+  if authz.require(Permission::ReadUserDetails).is_err() {
+    response.user = None;
+  }
+  if authz.require(Permission::ReadGuestDetails).is_err() {
+    response.guest = None;
+  }
+  response
+}
+
 /// List all actors.
 #[utoipa::path(
     get,
@@ -30,22 +40,10 @@ pub async fn list_actors(
 ) -> AppResult<Json<Vec<ActorResponse>>> {
   authz.require(Permission::ReadActorDetails)?;
 
-  let can_read_user = authz.require(Permission::ReadUserDetails).is_ok();
-  let can_read_guest = authz.require(Permission::ReadGuestDetails).is_ok();
-
   let actors = state.actor_service.list_actors().await?;
   let response: Vec<ActorResponse> = actors
     .into_iter()
-    .map(|details| {
-      let mut resp = ActorResponse::from(details);
-      if !can_read_user {
-        resp.user = None;
-      }
-      if !can_read_guest {
-        resp.guest = None;
-      }
-      resp
-    })
+    .map(|details| filter_actor_response(ActorResponse::from(details), &authz))
     .collect();
 
   Ok(Json(response))
@@ -70,23 +68,11 @@ pub async fn get_actor(
 ) -> AppResult<Json<ActorResponse>> {
   authz.require(Permission::ReadActorDetails)?;
 
-  let can_read_user = authz.require(Permission::ReadUserDetails).is_ok();
-  let can_read_guest = authz.require(Permission::ReadGuestDetails).is_ok();
-
   let actor = state
     .actor_service
     .get_actor_by_id(&actor_id)
     .await?
-    .map(|details| {
-      let mut resp = ActorResponse::from(details);
-      if !can_read_user {
-        resp.user = None;
-      }
-      if !can_read_guest {
-        resp.guest = None;
-      }
-      resp
-    })
+    .map(|details| filter_actor_response(ActorResponse::from(details), &authz))
     .ok_or_else(|| AppError::NotFound)?;
 
   Ok(Json(actor))
