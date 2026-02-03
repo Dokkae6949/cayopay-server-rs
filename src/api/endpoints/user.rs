@@ -30,7 +30,7 @@ pub async fn list_users(
 ) -> AppResult<Json<Vec<UserResponse>>> {
   authz.require(Permission::ReadUserDetails)?;
 
-  let users = state.actor_service.list_users().await?;
+  let users = state.user_service.list_all().await?;
   let response: Vec<UserResponse> = users.into_iter().map(Into::into).collect();
 
   Ok(Json(response))
@@ -56,7 +56,7 @@ pub async fn remove_user(
 ) -> AppResult<StatusCode> {
   authz.require(Permission::RemoveUser)?;
 
-  state.actor_service.remove_user_by_id(user_id).await?;
+  state.user_service.remove_by_id(user_id).await?;
 
   Ok(StatusCode::NO_CONTENT)
 }

@@ -20,7 +20,7 @@ pub struct EmailService {
 }
 
 impl EmailService {
-  pub fn new(config: &Config) -> Self {
+  pub fn new(config: &Config) -> AppResult<Self> {
     tracing::info!(
       "Initializing EmailService with host: {}, port: {}",
       config.smtp_host,
@@ -28,27 +28,34 @@ impl EmailService {
     );
 
     let creds = Credentials::new(
-      config.smtp_username.clone().expose().to_string(),
-      config.smtp_password.clone().expose().to_string(),
+      config.smtp_username.clone(),
+      config.smtp_password.clone(),
     );
 
     let mut mailer_builder = AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)
-      .expect("mailer should have been created")
+      .map_err(|e| {
+        tracing::error!("Failed to create SMTP transport: {}", e);
+        AppError::InternalServerError
+      })?
       .port(config.smtp_port)
       .credentials(creds);
 
     match config.smtp_port {
       465 => {
         tracing::info!("Using Implicit TLS (Wrapper) for port 465");
-        mailer_builder = mailer_builder.tls(Tls::Wrapper(
-          TlsParameters::new(config.smtp_host.clone()).expect("failed to create tls parameters"),
-        ));
+        let tls_params = TlsParameters::new(config.smtp_host.clone()).map_err(|e| {
+          tracing::error!("Failed to create TLS parameters: {}", e);
+          AppError::InternalServerError
+        })?;
+        mailer_builder = mailer_builder.tls(Tls::Wrapper(tls_params));
       }
       587 => {
         tracing::info!("Using Opportunistic TLS (STARTTLS) for port 587");
-        mailer_builder = mailer_builder.tls(Tls::Opportunistic(
-          TlsParameters::new(config.smtp_host.clone()).expect("failed to create tls parameters"),
-        ));
+        let tls_params = TlsParameters::new(config.smtp_host.clone()).map_err(|e| {
+          tracing::error!("Failed to create TLS parameters: {}", e);
+          AppError::InternalServerError
+        })?;
+        mailer_builder = mailer_builder.tls(Tls::Opportunistic(tls_params));
       }
       _ => {
         tracing::info!("Using default TLS settings for port {}", config.smtp_port);
@@ -57,10 +64,10 @@ impl EmailService {
 
     let mailer = mailer_builder.build();
 
-    Self {
+    Ok(Self {
       mailer,
       from: config.smtp_from.clone(),
-    }
+    })
   }
 
   pub async fn send_invite(&self, email: &Email, token: &str, inviter_name: &str) -> AppResult<()> {

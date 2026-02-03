@@ -30,7 +30,7 @@ pub async fn list_guests(
 ) -> AppResult<Json<Vec<GuestResponse>>> {
   authz.require(Permission::ReadGuestDetails)?;
 
-  let guests = state.actor_service.list_guests().await?;
+  let guests = state.guest_service.list_all().await?;
   let response: Vec<GuestResponse> = guests.into_iter().map(Into::into).collect();
 
   Ok(Json(response))
@@ -56,7 +56,7 @@ pub async fn remove_guest(
 ) -> AppResult<StatusCode> {
   authz.require(Permission::RemoveGuest)?;
 
-  state.actor_service.remove_guest_by_id(guest_id).await?;
+  state.guest_service.remove_by_id(guest_id).await?;
 
   Ok(StatusCode::NO_CONTENT)
 }

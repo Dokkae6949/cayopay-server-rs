@@ -5,7 +5,10 @@ use sqlx::{Executor, PgConnection, Postgres};
 pub struct TransactionStore;
 
 impl TransactionStore {
-  pub async fn save(executor: &mut PgConnection, transaction: Transaction) -> AppResult<()> {
+  pub async fn save<'c, E>(executor: E, transaction: &Transaction) -> AppResult<()>
+  where
+    E: Executor<'c, Database = Postgres>,
+  {
     sqlx::query!(
       r#"
       INSERT INTO transactions (id, sender_wallet_id, receiver_wallet_id, executor_actor_id, amount, description, created_at, updated_at)
@@ -20,9 +23,8 @@ impl TransactionStore {
       transaction.created_at,
       transaction.updated_at,
     )
-    .execute(&mut *executor)
-    .await
-    .map_err(crate::error::AppError::Database)?;
+    .execute(executor)
+    .await?;
 
     Ok(())
   }
@@ -53,7 +55,7 @@ impl TransactionStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let balance = sqlx::query_scalar!(
+    let balance: Option<i64> = sqlx::query_scalar!(
       r#"
       SELECT COALESCE(SUM(
         CASE
@@ -84,37 +86,26 @@ mod tests {
 
   use super::*;
 
-  // TODO: Test and verify specifically balance calculation
   #[sqlx::test]
-  async fn test_balance_calculation(pool: PgPool) {
-    let mut conn = pool.acquire().await.unwrap();
-
+  async fn test_balance_calculation(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
     let red_actor = Actor::new();
     let blue_actor = Actor::new();
 
     let red_wallet = Wallet::new(red_actor.id);
     let blue_wallet = Wallet::new(blue_actor.id);
 
-    ActorStore::save(&pool, &red_actor)
-      .await
-      .expect("Failed to create actor");
-    ActorStore::save(&pool, &blue_actor)
-      .await
-      .expect("Failed to create actor");
+    ActorStore::save(&pool, &red_actor).await?;
+    ActorStore::save(&pool, &blue_actor).await?;
 
-    WalletStore::save(&pool, &red_wallet)
-      .await
-      .expect("Failed to create red wallet");
-    WalletStore::save(&pool, &blue_wallet)
-      .await
-      .expect("Failed to create blue wallet");
+    WalletStore::save(&pool, &red_wallet).await?;
+    WalletStore::save(&pool, &blue_wallet).await?;
 
     let transactions = vec![
       Transaction {
         id: Id::new(),
-        sender_wallet_id: red_wallet.id.clone(),
-        receiver_wallet_id: blue_wallet.id.clone(),
-        executor_actor_id: red_actor.id.clone(),
+        sender_wallet_id: red_wallet.id,
+        receiver_wallet_id: blue_wallet.id,
+        executor_actor_id: red_actor.id,
         amount: 100,
         description: Some("Payment 1".to_string()),
         created_at: chrono::Utc::now(),
@@ -122,9 +113,9 @@ mod tests {
       },
       Transaction {
         id: Id::new(),
-        sender_wallet_id: blue_wallet.id.clone(),
-        receiver_wallet_id: red_wallet.id.clone(),
-        executor_actor_id: blue_actor.id.clone(),
+        sender_wallet_id: blue_wallet.id,
+        receiver_wallet_id: red_wallet.id,
+        executor_actor_id: blue_actor.id,
         amount: 50,
         description: Some("Payment 2".to_string()),
         created_at: chrono::Utc::now(),
@@ -132,9 +123,9 @@ mod tests {
       },
       Transaction {
         id: Id::new(),
-        sender_wallet_id: red_wallet.id.clone(),
-        receiver_wallet_id: blue_wallet.id.clone(),
-        executor_actor_id: red_actor.id.clone(),
+        sender_wallet_id: red_wallet.id,
+        receiver_wallet_id: blue_wallet.id,
+        executor_actor_id: red_actor.id,
         amount: 30,
         description: Some("Payment 3".to_string()),
         created_at: chrono::Utc::now(),
@@ -142,18 +133,16 @@ mod tests {
       },
     ];
 
-    for tx in transactions {
-      TransactionStore::save(&mut conn, tx).await.unwrap();
+    for tx in &transactions {
+      TransactionStore::save(&pool, tx).await?;
     }
 
-    let red_balance = TransactionStore::balance_by_wallet_id(&pool, &red_wallet.id)
-      .await
-      .unwrap();
-    let blue_balance = TransactionStore::balance_by_wallet_id(&pool, &blue_wallet.id)
-      .await
-      .unwrap();
+    let red_balance = TransactionStore::balance_by_wallet_id(&pool, &red_wallet.id).await?;
+    let blue_balance = TransactionStore::balance_by_wallet_id(&pool, &blue_wallet.id).await?;
 
     assert_eq!(red_balance, -80); //  -100 + 50 - 30
     assert_eq!(blue_balance, 80); //  +100 - 50 + 30
+
+    Ok(())
   }
 }

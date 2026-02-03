@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::net::SocketAddr;
 
 mod api;
@@ -25,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let pool = bootstrap::init_database(&config).await?;
   tracing::info!("Database initialized");
 
-  let state = AppState::new(&config, pool);
+  let state = AppState::new(&config, pool)?;
   tracing::info!("App state initialized");
 
   bootstrap::seed_database(&state).await?;

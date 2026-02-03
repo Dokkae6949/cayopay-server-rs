@@ -2,20 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use utoipa::ToSchema;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize, ToSchema)]
-pub enum Permission {
-  ConfigureSettings,
-
-  RemoveActor,
-  ReadActorDetails,
-
-  InviteUser,
-  RemoveUser,
-  ReadUserDetails,
-
-  RemoveGuest,
-  ReadGuestDetails,
-}
+use super::permission::Permission;
 
 #[derive(
   Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, ToSchema,
@@ -52,28 +39,32 @@ impl From<String> for Role {
 }
 
 impl Role {
-  pub fn permissions(&self) -> Vec<Permission> {
+  const OWNER_PERMISSIONS: &'static [Permission] = &[
+    Permission::ConfigureSettings,
+    Permission::RemoveActor,
+    Permission::ReadActorDetails,
+    Permission::InviteUser,
+    Permission::RemoveUser,
+    Permission::ReadUserDetails,
+    Permission::RemoveGuest,
+    Permission::ReadGuestDetails,
+  ];
+
+  const ADMIN_PERMISSIONS: &'static [Permission] = &[
+    Permission::RemoveActor,
+    Permission::ReadActorDetails,
+    Permission::InviteUser,
+    Permission::RemoveUser,
+    Permission::ReadUserDetails,
+    Permission::RemoveGuest,
+    Permission::ReadGuestDetails,
+  ];
+
+  pub fn permissions(&self) -> &'static [Permission] {
     match self {
-      Role::Owner => vec![
-        Permission::ConfigureSettings,
-        Permission::RemoveActor,
-        Permission::ReadActorDetails,
-        Permission::InviteUser,
-        Permission::RemoveUser,
-        Permission::ReadUserDetails,
-        Permission::RemoveGuest,
-        Permission::ReadGuestDetails,
-      ],
-      Role::Admin => vec![
-        Permission::RemoveActor,
-        Permission::ReadActorDetails,
-        Permission::InviteUser,
-        Permission::RemoveUser,
-        Permission::ReadUserDetails,
-        Permission::RemoveGuest,
-        Permission::ReadGuestDetails,
-      ],
-      Role::Undefined => vec![],
+      Role::Owner => Self::OWNER_PERMISSIONS,
+      Role::Admin => Self::ADMIN_PERMISSIONS,
+      Role::Undefined => &[],
     }
   }
 

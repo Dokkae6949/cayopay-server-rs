@@ -1,6 +1,7 @@
 pub mod actor;
 pub mod guest;
 pub mod invite;
+pub mod permission;
 pub mod role;
 pub mod session;
 pub mod transaction;
@@ -10,7 +11,8 @@ pub mod wallet;
 pub use actor::Actor;
 pub use guest::Guest;
 pub use invite::Invite;
-pub use role::{Permission, Role};
+pub use permission::Permission;
+pub use role::Role;
 pub use session::Session;
 pub use transaction::Transaction;
 pub use user::User;

@@ -1,10 +1,9 @@
-use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
 
 use crate::{
-  domain::{Actor, Guest, Role},
-  types::{Email, Id},
+  domain::{Actor, Guest},
+  types::Id,
 };
 
 #[derive(Serialize, ToSchema)]

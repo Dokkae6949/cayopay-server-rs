@@ -1,7 +1,5 @@
 use serde::Deserialize;
 
-use crate::types::{Email, RawPassword};
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
   #[serde(default = "default_host")]
@@ -15,8 +13,8 @@ pub struct Config {
 
   pub smtp_host: String,
   pub smtp_port: u16,
-  pub smtp_username: Email,
-  pub smtp_password: RawPassword,
+  pub smtp_username: String,
+  pub smtp_password: String,
   pub smtp_from: String,
 
   #[serde(default = "default_session_cookie_name")]
@@ -26,9 +24,9 @@ pub struct Config {
   pub session_expiration_days: i64,
 
   #[serde(default = "default_owner_email")]
-  pub owner_email: Email,
+  pub owner_email: String,
   #[serde(default = "default_owner_password")]
-  pub owner_password: RawPassword,
+  pub owner_password: String,
   #[serde(default = "default_owner_first_name")]
   pub owner_first_name: String,
   #[serde(default = "default_owner_last_name")]
@@ -51,12 +49,12 @@ fn default_session_expiration_days() -> i64 {
   1
 }
 
-fn default_owner_email() -> Email {
-  Email::new("admin@example.com")
+fn default_owner_email() -> String {
+  "admin@example.com".to_string()
 }
 
-fn default_owner_password() -> RawPassword {
-  RawPassword::new("password")
+fn default_owner_password() -> String {
+  "password".to_string()
 }
 
 fn default_owner_first_name() -> String {
