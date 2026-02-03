@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use sqlx::PgPool;
 
 use crate::{
-  domain::{actor::ActorWithDetails, Actor, Guest, User},
+  domain::{actor::ActorWithDetails, Actor},
   error::AppResult,
   stores::{ActorStore, GuestStore, UserStore},
   types::Id,
@@ -17,10 +17,6 @@ pub struct ActorService {
 impl ActorService {
   pub fn new(pool: PgPool) -> Self {
     Self { pool }
-  }
-
-  pub async fn get_user_by_id(&self, user_id: &Id<User>) -> AppResult<Option<User>> {
-    UserStore::find_by_id(&self.pool, user_id).await
   }
 
   pub async fn list_actors(&self) -> AppResult<Vec<ActorWithDetails>> {
@@ -58,29 +54,8 @@ impl ActorService {
     }
   }
 
-  pub async fn list_users(&self) -> AppResult<Vec<User>> {
-    UserStore::list_all(&self.pool).await
-  }
-
-  pub async fn list_guests(&self) -> AppResult<Vec<Guest>> {
-    GuestStore::list_all(&self.pool).await
-  }
-
   pub async fn remove_by_id(&self, id: Id<Actor>) -> AppResult<()> {
-    ActorStore::remove_by_id(&self.pool, &id).await?;
-
-    Ok(())
-  }
-
-  pub async fn remove_user_by_id(&self, id: Id<User>) -> AppResult<()> {
-    UserStore::remove_by_id(&self.pool, &id).await?;
-
-    Ok(())
-  }
-
-  pub async fn remove_guest_by_id(&self, id: Id<Guest>) -> AppResult<()> {
-    GuestStore::remove_by_id(&self.pool, &id).await?;
-
-    Ok(())
+    ActorStore::remove_by_id(&self.pool, &id).await
   }
 }
+
