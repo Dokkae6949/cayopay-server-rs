@@ -1,13 +1,5 @@
+use crate::{api::models::HealthResponse, state::AppState};
 use axum::{response::IntoResponse, routing::get, Json, Router};
-use serde::Serialize;
-use utoipa::ToSchema;
-
-use crate::state::AppState;
-
-#[derive(Serialize, ToSchema)]
-pub struct HealthResponse {
-  status: String,
-}
 
 #[utoipa::path(
   get,

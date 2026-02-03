@@ -1,47 +1,16 @@
+use crate::{
+  api::{extractor::Authz, models::UserResponse},
+  domain::{Permission, User},
+  error::{AppResult, ErrorResponse},
+  state::AppState,
+  types::Id,
+};
 use axum::{
   extract::{Path, State},
   http::StatusCode,
   routing::{delete, get},
   Json, Router,
 };
-use chrono::{DateTime, Utc};
-use serde::Serialize;
-use utoipa::ToSchema;
-
-use crate::{
-  api::extractor::Authz,
-  domain::{Permission, Role, User},
-  error::{AppResult, ErrorResponse},
-  state::AppState,
-  types::{Email, Id},
-};
-
-#[derive(Serialize, ToSchema)]
-pub struct UserResponse {
-  pub id: Id<User>,
-  pub actor_id: Id<crate::domain::Actor>,
-  pub email: Email,
-  pub first_name: String,
-  pub last_name: String,
-  pub role: Role,
-  pub created_at: DateTime<Utc>,
-  pub updated_at: DateTime<Utc>,
-}
-
-impl From<User> for UserResponse {
-  fn from(user: User) -> Self {
-    Self {
-      id: user.id,
-      actor_id: user.actor_id,
-      email: user.email,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      role: user.role,
-      created_at: user.created_at,
-      updated_at: user.updated_at,
-    }
-  }
-}
 
 /// List all users
 #[utoipa::path(

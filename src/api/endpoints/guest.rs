@@ -1,34 +1,16 @@
+use crate::{
+  api::{extractor::Authz, models::GuestResponse},
+  domain::{Guest, Permission},
+  error::{AppResult, ErrorResponse},
+  state::AppState,
+  types::Id,
+};
 use axum::{
   extract::{Path, State},
   http::StatusCode,
   routing::{delete, get},
   Json, Router,
 };
-use serde::Serialize;
-use utoipa::ToSchema;
-
-use crate::{
-  api::extractor::Authz,
-  domain::{Guest, Permission},
-  error::{AppResult, ErrorResponse},
-  state::AppState,
-  types::Id,
-};
-
-#[derive(Serialize, ToSchema)]
-pub struct GuestResponse {
-  pub id: Id<Guest>,
-  pub actor_id: Id<crate::domain::Actor>,
-}
-
-impl From<Guest> for GuestResponse {
-  fn from(guest: Guest) -> Self {
-    Self {
-      id: guest.id,
-      actor_id: guest.actor_id,
-    }
-  }
-}
 
 /// List all guests
 #[utoipa::path(

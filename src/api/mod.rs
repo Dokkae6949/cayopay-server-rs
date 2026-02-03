@@ -5,13 +5,11 @@ use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-pub mod actor;
-pub mod auth;
+pub mod endpoints;
 pub mod extractor;
-pub mod guest;
-pub mod health;
-pub mod invites;
-pub mod user;
+pub mod models;
+
+use endpoints::{actor, auth, guest, health, invites, user};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -37,16 +35,13 @@ pub mod user;
             crate::types::RawPassword,
             crate::types::HashedPassword,
             crate::domain::role::Role,
-            actor::ActorResponse,
-            actor::UserActorDetails,
-            actor::GuestActorDetails,
-            health::HealthResponse,
-            auth::LoginRequest,
-            auth::UserResponse,
-            invites::InviteRequest,
-            invites::AcceptInviteRequest,
-            user::UserResponse,
-            guest::GuestResponse,
+            models::UserResponse,
+            models::GuestResponse,
+            models::ActorResponse,
+            models::HealthResponse,
+            models::LoginRequest,
+            models::InviteRequest,
+            models::AcceptInviteRequest,
         )
     ),
     tags(

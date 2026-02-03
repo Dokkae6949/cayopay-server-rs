@@ -1,37 +1,14 @@
-use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
-use serde::Deserialize;
-use utoipa::ToSchema;
-use validator::Validate;
-
 use crate::{
-  api::extractor::{Authz, ValidatedJson},
+  api::{
+    extractor::{Authz, ValidatedJson},
+    models::{AcceptInviteRequest, InviteRequest},
+  },
   domain::{Permission, Role},
-  error::AppResult,
+  error::{AppResult, ErrorResponse},
   state::AppState,
   types::Email,
 };
-
-#[derive(Deserialize, Validate, ToSchema)]
-pub struct InviteRequest {
-  #[validate(email)]
-  #[schema(example = "friend@example.com")]
-  pub email: String,
-
-  pub role: Role,
-}
-
-#[derive(serde::Deserialize, validator::Validate, utoipa::ToSchema)]
-pub struct AcceptInviteRequest {
-  #[validate(length(min = 1, max = 127))]
-  #[schema(example = "John")]
-  pub first_name: String,
-  #[validate(length(min = 1, max = 127))]
-  #[schema(example = "Doe")]
-  pub last_name: String,
-  #[validate(length(min = 8, max = 127))]
-  #[schema(example = "password123")]
-  pub password: String,
-}
+use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 
 #[utoipa::path(
   post,
