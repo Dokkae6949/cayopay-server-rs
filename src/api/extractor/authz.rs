@@ -89,10 +89,10 @@ mod tests {
   #[test]
   fn test_authz_require() {
     let owner = Authz(create_user(Role::Owner));
-    assert!(owner.require(Permission::InviteUsers).is_ok());
+    assert!(owner.require(Permission::InviteUser).is_ok());
 
     let admin = Authz(create_user(Role::Admin));
-    assert!(admin.require(Permission::InviteUsers).is_ok());
+    assert!(admin.require(Permission::InviteUser).is_ok());
     assert!(admin.require(Permission::ConfigureSettings).is_err());
   }
 
@@ -100,7 +100,7 @@ mod tests {
   fn test_authz_require_any() {
     let admin = Authz(create_user(Role::Admin));
     assert!(admin
-      .require_any(&[Permission::InviteUsers, Permission::ConfigureSettings])
+      .require_any(&[Permission::InviteUser, Permission::ConfigureSettings])
       .is_ok());
     assert!(admin.require_any(&[Permission::ConfigureSettings]).is_err());
   }
@@ -109,13 +109,13 @@ mod tests {
   fn test_authz_require_all() {
     let owner = Authz(create_user(Role::Owner));
     assert!(owner
-      .require_all(&[Permission::InviteUsers, Permission::ConfigureSettings])
+      .require_all(&[Permission::InviteUser, Permission::ConfigureSettings])
       .is_ok());
 
     let admin = Authz(create_user(Role::Admin));
     assert!(admin
-      .require_all(&[Permission::InviteUsers, Permission::ConfigureSettings])
+      .require_all(&[Permission::InviteUser, Permission::ConfigureSettings])
       .is_err());
-    assert!(admin.require_all(&[Permission::InviteUsers]).is_ok());
+    assert!(admin.require_all(&[Permission::InviteUser]).is_ok());
   }
 }

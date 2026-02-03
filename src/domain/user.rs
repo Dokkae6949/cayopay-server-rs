@@ -7,12 +7,11 @@ use crate::domain::Actor;
 use crate::domain::Role;
 use crate::types::{Email, HashedPassword, Id};
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, FromRow)]
 pub struct User {
   pub id: Id<User>,
   pub actor_id: Id<Actor>,
   pub email: Email,
-  #[serde(skip)]
   pub password_hash: HashedPassword,
   pub first_name: String,
   pub last_name: String,

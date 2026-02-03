@@ -6,8 +6,10 @@ use utoipa::ToSchema;
 pub enum Permission {
   ConfigureSettings,
 
-  InviteUsers,
-  ViewAllActors,
+  InviteUser,
+  RemoveUser,
+
+  ReadUserDetails,
 }
 
 #[derive(
@@ -49,10 +51,15 @@ impl Role {
     match self {
       Role::Owner => vec![
         Permission::ConfigureSettings,
-        Permission::InviteUsers,
-        Permission::ViewAllActors,
+        Permission::InviteUser,
+        Permission::RemoveUser,
+        Permission::ReadUserDetails,
       ],
-      Role::Admin => vec![Permission::InviteUsers, Permission::ViewAllActors],
+      Role::Admin => vec![
+        Permission::InviteUser,
+        Permission::RemoveUser,
+        Permission::ReadUserDetails,
+      ],
       Role::Undefined => vec![],
     }
   }
@@ -78,11 +85,11 @@ mod tests {
   fn test_role_permissions() {
     let owner_perms = Role::Owner.permissions();
     assert!(owner_perms.contains(&Permission::ConfigureSettings));
-    assert!(owner_perms.contains(&Permission::InviteUsers));
+    assert!(owner_perms.contains(&Permission::InviteUser));
 
     let admin_perms = Role::Admin.permissions();
     assert!(!admin_perms.contains(&Permission::ConfigureSettings));
-    assert!(admin_perms.contains(&Permission::InviteUsers));
+    assert!(admin_perms.contains(&Permission::InviteUser));
 
     let undefined_perms = Role::Undefined.permissions();
     assert!(undefined_perms.is_empty());
@@ -91,13 +98,13 @@ mod tests {
   #[test]
   fn test_has_permission() {
     assert!(Role::Owner.has_permission(Permission::ConfigureSettings));
-    assert!(Role::Owner.has_permission(Permission::InviteUsers));
+    assert!(Role::Owner.has_permission(Permission::InviteUser));
 
     assert!(!Role::Admin.has_permission(Permission::ConfigureSettings));
-    assert!(Role::Admin.has_permission(Permission::InviteUsers));
+    assert!(Role::Admin.has_permission(Permission::InviteUser));
 
     assert!(!Role::Undefined.has_permission(Permission::ConfigureSettings));
-    assert!(!Role::Undefined.has_permission(Permission::InviteUsers));
+    assert!(!Role::Undefined.has_permission(Permission::InviteUser));
   }
 
   #[test]

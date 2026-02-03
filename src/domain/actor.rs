@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 use crate::domain::{Guest, User};
 use crate::types::Id;
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, FromRow)]
 pub struct Actor {
   pub id: Id<Actor>,
   pub created_at: DateTime<Utc>,
@@ -24,11 +24,9 @@ impl Actor {
   }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone)]
 pub struct ActorWithDetails {
   pub actor: Actor,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub user: Option<User>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub guest: Option<Guest>,
 }

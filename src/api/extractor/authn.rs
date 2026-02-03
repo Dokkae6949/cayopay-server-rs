@@ -2,7 +2,7 @@ use axum::{async_trait, extract::FromRequestParts, http::request::Parts, Request
 use axum_extra::extract::CookieJar;
 use std::ops::Deref;
 
-use crate::{domain::User, error::AppError, state::AppState, stores::UserStore};
+use crate::{domain::User, error::AppError, state::AppState};
 
 pub struct Authn(pub User);
 
@@ -38,7 +38,9 @@ impl FromRequestParts<AppState> for Authn {
       .await?
       .ok_or(AppError::Authentication)?;
 
-    let user = UserStore::find_by_id(&state.pool, &session.user_id)
+    let user = state
+      .actor_service
+      .get_user_by_id(&session.user_id)
       .await?
       .ok_or(AppError::Authentication)?;
 

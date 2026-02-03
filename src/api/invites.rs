@@ -54,7 +54,7 @@ pub async fn create_invite(
   authz: Authz,
   ValidatedJson(payload): ValidatedJson<InviteRequest>,
 ) -> AppResult<()> {
-  authz.require(Permission::InviteUsers)?;
+  authz.require(Permission::InviteUser)?;
   authz.can_assign(payload.role)?;
 
   let email = Email::new(payload.email);

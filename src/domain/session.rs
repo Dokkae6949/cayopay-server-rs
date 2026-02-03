@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 use crate::domain::User;
 use crate::types::Id;
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, FromRow)]
 pub struct Session {
   pub id: Id<Session>,
   pub user_id: Id<User>,

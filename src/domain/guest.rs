@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 use crate::domain::Actor;
 use crate::types::Id;
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, FromRow)]
 pub struct Guest {
   pub id: Id<Guest>,
   pub actor_id: Id<Actor>,

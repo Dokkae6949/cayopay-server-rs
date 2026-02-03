@@ -20,6 +20,8 @@ pub mod invites;
         invites::create_invite,
         invites::accept_invite,
         actor::list_actors,
+        actor::get_actor,
+        actor::remove_actors,
     ),
     components(
         schemas(
@@ -29,11 +31,9 @@ pub mod invites;
             crate::types::RawPassword,
             crate::types::HashedPassword,
             crate::domain::role::Role,
-            crate::domain::actor::Actor,
-            crate::domain::guest::Guest,
             actor::ActorResponse,
-            actor::UserActorResponse,
-            actor::GuestActorResponse,
+            actor::UserActorDetails,
+            actor::GuestActorDetails,
             health::HealthResponse,
             auth::LoginRequest,
             auth::UserResponse,

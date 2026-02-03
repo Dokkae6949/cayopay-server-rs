@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 use crate::domain::Actor;
 use crate::types::Id;
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+#[derive(Debug, Clone, FromRow)]
 pub struct Wallet {
   pub id: Id<Wallet>,
   pub owner_actor_id: Id<Actor>,

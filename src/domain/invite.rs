@@ -5,7 +5,7 @@ use sqlx::FromRow;
 use crate::domain::{Role, User};
 use crate::types::{Email, Id};
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, FromRow)]
 pub struct Invite {
   pub id: Id<Invite>,
   pub created_by: Id<User>,
