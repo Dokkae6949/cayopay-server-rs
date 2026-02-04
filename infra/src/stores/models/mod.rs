@@ -2,6 +2,7 @@ pub mod actor;
 pub mod guest;
 pub mod invite;
 pub mod session;
+pub mod shop;
 pub mod transaction;
 pub mod user;
 pub mod wallet;
