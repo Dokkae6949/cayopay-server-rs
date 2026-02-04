@@ -40,6 +40,7 @@
             rustfmt
             sqlx-cli
             openssl
+            just
           ];
 
           RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
