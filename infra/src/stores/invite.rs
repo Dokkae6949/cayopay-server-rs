@@ -112,7 +112,7 @@ impl InviteStore {
     Ok(row.map(Into::into))
   }
 
-  pub async fn get_all<'c, E>(executor: E) -> Result<Vec<Invite>, sqlx::Error>
+  pub async fn list_all<'c, E>(executor: E) -> Result<Vec<Invite>, sqlx::Error>
   where
     E: Executor<'c, Database = Postgres>,
   {

@@ -19,6 +19,6 @@ impl UserService {
   }
 
   pub async fn get_all(&self) -> AppResult<Vec<User>> {
-    Ok(UserStore::get_all(&self.pool).await?)
+    Ok(UserStore::list_all(&self.pool).await?)
   }
 }

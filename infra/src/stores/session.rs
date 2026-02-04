@@ -71,7 +71,7 @@ impl SessionStore {
     Ok(row.map(Into::into))
   }
 
-  pub async fn find_by_user_id<'c, E>(
+  pub async fn list_by_user_id<'c, E>(
     executor: E,
     user_id: &UserId,
   ) -> Result<Vec<Session>, sqlx::Error>

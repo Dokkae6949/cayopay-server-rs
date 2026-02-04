@@ -54,7 +54,7 @@ impl TransactionStore {
     Ok(row.map(Into::into))
   }
 
-  pub async fn find_by_wallet_id<'c, E>(
+  pub async fn list_by_wallet_id<'c, E>(
     executor: E,
     wallet_id: &WalletId,
   ) -> Result<Vec<Transaction>, sqlx::Error>

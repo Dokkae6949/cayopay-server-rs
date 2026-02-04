@@ -153,6 +153,23 @@ impl ShopOfferingStore {
     Ok(row.map(Into::into))
   }
 
+  pub async fn delete_by_id<'c, E>(executor: E, id: &ShopOfferingId) -> Result<(), sqlx::Error>
+  where
+    E: Executor<'c, Database = Postgres>,
+  {
+    sqlx::query!(
+      r#"
+      DELETE FROM shop_offerings
+      WHERE id = $1
+      "#,
+      id.into_inner()
+    )
+    .execute(executor)
+    .await?;
+
+    Ok(())
+  }
+
   pub async fn find_by_id<'c, E>(
     executor: E,
     id: &ShopOfferingId,
@@ -201,7 +218,7 @@ impl ShopOfferingStore {
 pub struct ShopMemberStore;
 
 impl ShopMemberStore {
-  pub async fn add_member<'c, E>(
+  pub async fn create<'c, E>(
     executor: E,
     shop_id: &ShopId,
     user_id: &UserId,
@@ -225,7 +242,7 @@ impl ShopMemberStore {
     Ok(row.into())
   }
 
-  pub async fn remove_member<'c, E>(
+  pub async fn delete_by_shop_and_user_id<'c, E>(
     executor: E,
     shop_id: &ShopId,
     user_id: &UserId,

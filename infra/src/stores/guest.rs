@@ -95,7 +95,7 @@ impl GuestStore {
     Ok(row.map(Into::into))
   }
 
-  pub async fn get_all<'c, E>(executor: E) -> Result<Vec<Guest>, sqlx::Error>
+  pub async fn list_all<'c, E>(executor: E) -> Result<Vec<Guest>, sqlx::Error>
   where
     E: Executor<'c, Database = Postgres>,
   {

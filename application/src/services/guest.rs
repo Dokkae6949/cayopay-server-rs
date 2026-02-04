@@ -15,6 +15,6 @@ impl GuestService {
   }
 
   pub async fn get_all(&self) -> AppResult<Vec<Guest>> {
-    Ok(GuestStore::get_all(&self.pool).await?)
+    Ok(GuestStore::list_all(&self.pool).await?)
   }
 }

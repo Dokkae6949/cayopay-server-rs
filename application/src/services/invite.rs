@@ -99,6 +99,6 @@ impl InviteService {
   }
 
   pub async fn get_all(&self) -> AppResult<Vec<Invite>> {
-    Ok(InviteStore::get_all(&self.pool).await?)
+    Ok(InviteStore::list_all(&self.pool).await?)
   }
 }
