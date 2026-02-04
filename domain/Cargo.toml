@@ -1,0 +1,16 @@
+[package]
+name = "domain"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.8", features = ["v7", "serde", "v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+utoipa = { version = "4.2", features = ["uuid", "chrono"] }
+thiserror = "1.0"
+validator = { version = "0.18", features = ["derive"] }
+# We keep sqlx support for enums like Role that map directly to DB types
+sqlx = { version = "0.7", features = ["postgres", "uuid", "chrono", "macros"] }
+argon2 = { version = "0.5", features = ["std"] }

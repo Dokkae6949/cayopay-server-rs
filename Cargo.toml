@@ -3,19 +3,22 @@ name = "cayopay-server"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+resolver = "3"
+members = ["api", "application", "domain", "infra"]
+
 [dependencies]
+# Workspace members
+api = { path = "./api" }
+application = { path = "./application" }
+domain = { path = "./domain" }
+infra = { path = "./infra" }
+
 # Async Runtime
 tokio = { version = "1.37", features = ["full"] }
 
 # Web Framework
 axum = "0.7"
-axum-extra = { version = "0.9", features = ["cookie"] }
-tower = { version = "0.4", features = ["util"] }
-tower-http = { version = "0.5", features = ["trace", "cors"] }
-
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 
 # Database
 sqlx = { version = "0.7", features = [
@@ -26,25 +29,6 @@ sqlx = { version = "0.7", features = [
     "chrono"
 ] }
 
-# Environment
-dotenvy = "0.15"
-envy = "0.4"
-
-# Utilities
-uuid = { version = "1.8", features = ["v7", "serde", "v4"] }
-chrono = { version = "0.4", features = ["serde"] }
-thiserror = "1.0"
-validator = { version = "0.18", features = ["derive"] }
-
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-# Security
-argon2 = { version = "0.5", features = ["std"] }
-
-# OpenAPI
-utoipa = { version = "4.2", features = ["axum_extras", "uuid", "chrono"] }
-utoipa-swagger-ui = { version = "7.0", features = ["axum"] }
-time = "0.3.46"
-lettre = { version = "0.11.19", default-features = false, features = ["tokio1", "tokio1-rustls-tls", "builder", "smtp-transport", "pool"] }
