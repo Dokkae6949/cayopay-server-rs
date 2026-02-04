@@ -12,7 +12,7 @@ create table transactions (
     source_wallet_id uuid not null references wallets(id) on delete cascade,
     destination_wallet_id uuid not null references wallets(id) on delete cascade,
     executor_actor_id uuid references actors(id) on delete set null,
-    amount int not null check (amount > 0),
+    amount_cents int not null check (amount_cents > 0),
     description text,
     created_at timestamptz not null default now(),
     updated_at timestamptz

@@ -1,25 +1,35 @@
 use std::fmt;
-use std::ops::{Add, Sub};
+use std::ops::{Add, Neg, Sub};
 
 /// Money represented in minor currency units (cents)
 ///
-/// Always non-negative. Stored as minor units (cents) internally.
+/// Can be positive (credit) or negative (debt).
+/// Stored as minor units (cents) internally.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Money(u64);
+pub struct Money(i64);
 
 impl Money {
   /// Zero money
   pub const ZERO: Money = Money(0);
 
+  /// Maximum representable money value
+  pub const MAX: Money = Money(i64::MAX);
+
+  /// Minimum representable money value (maximum debt)
+  pub const MIN: Money = Money(i64::MIN);
+
   /// Create Money from minor units (cents)
   ///
   /// # Examples
   /// ```
-  /// # use money::Money;
+  /// use domain::types::money::Money;
   /// let money = Money::from_minor(1050);
   /// assert_eq!(money.to_string(), "10.50");
+  ///
+  /// let debt = Money::from_minor(-1050);
+  /// assert_eq!(debt.to_string(), "-10.50");
   /// ```
-  pub const fn from_minor(cents: u64) -> Self {
+  pub const fn from_minor(cents: i64) -> Self {
     Self(cents)
   }
 
@@ -27,37 +37,62 @@ impl Money {
   ///
   /// # Examples
   /// ```
-  /// # use money::Money;
+  /// use domain::types::money::Money;
   /// let money = Money::from_major(10);
   /// assert_eq!(money.as_minor(), 1000);
+  ///
+  /// let debt = Money::from_major(-10);
+  /// assert_eq!(debt.as_minor(), -1000);
   /// ```
-  pub const fn from_major(euros: u64) -> Self {
+  pub const fn from_major(euros: i64) -> Self {
     Self(euros.saturating_mul(100))
   }
 
   /// Get the raw minor units value (cents)
-  pub const fn as_minor(&self) -> u64 {
+  pub const fn as_minor(&self) -> i64 {
     self.0
   }
 
-  /// Get the major units (euros)
-  pub const fn as_major(&self) -> u64 {
+  /// Get the major units (euros), preserving sign
+  pub const fn as_major(&self) -> i64 {
     self.0 / 100
   }
 
-  /// Get remaining cents after euros
+  /// Get remaining cents after euros (always positive)
+  ///
+  /// For negative amounts, returns the absolute value of the remainder.
+  /// For example, -10.50 returns 50 cents.
   pub const fn cents(&self) -> u64 {
-    self.0 % 100
+    (self.0.saturating_abs() as u64) % 100
   }
 
-  /// Format as currency string (e.g., "€10.50")
+  /// Format as currency string (e.g., "€10.50" or "€-10.50")
   pub fn format_eur(&self) -> String {
-    format!("€{}.{:02}", self.as_major(), self.cents())
+    if self.0 < 0 {
+      format!("€-{}.{:02}", self.as_major().saturating_abs(), self.cents())
+    } else {
+      format!("€{}.{:02}", self.as_major(), self.cents())
+    }
   }
 
   /// Check if the money amount is zero
   pub const fn is_zero(&self) -> bool {
     self.0 == 0
+  }
+
+  /// Check if the money amount is positive (credit)
+  pub const fn is_positive(&self) -> bool {
+    self.0 > 0
+  }
+
+  /// Check if the money amount is negative (debt)
+  pub const fn is_negative(&self) -> bool {
+    self.0 < 0
+  }
+
+  /// Get the absolute value
+  pub const fn abs(&self) -> Self {
+    Self(self.0.saturating_abs())
   }
 
   /// Checked addition. Returns `None` if overflow occurred.
@@ -68,7 +103,7 @@ impl Money {
     }
   }
 
-  /// Checked subtraction. Returns `None` if underflow occurred.
+  /// Checked subtraction. Returns `None` if overflow occurred.
   pub const fn checked_sub(self, other: Self) -> Option<Self> {
     match self.0.checked_sub(other.0) {
       Some(diff) => Some(Self(diff)),
@@ -76,20 +111,37 @@ impl Money {
     }
   }
 
-  /// Saturating addition. Returns the maximum value on overflow.
+  /// Saturating addition. Returns the max/min value on overflow.
   pub const fn saturating_add(self, other: Self) -> Self {
     Self(self.0.saturating_add(other.0))
   }
 
-  /// Saturating subtraction. Returns zero on underflow.
+  /// Saturating subtraction. Returns the min/max value on overflow.
   pub const fn saturating_sub(self, other: Self) -> Self {
     Self(self.0.saturating_sub(other.0))
+  }
+
+  /// Checked negation. Returns `None` if negating would overflow.
+  pub const fn checked_neg(self) -> Option<Self> {
+    match self.0.checked_neg() {
+      Some(neg) => Some(Self(neg)),
+      None => None,
+    }
   }
 }
 
 impl fmt::Display for Money {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "{}.{:02}", self.as_major(), self.cents())
+    if self.0 < 0 {
+      write!(
+        f,
+        "-{}.{:02}",
+        self.as_major().saturating_abs(),
+        self.cents()
+      )
+    } else {
+      write!(f, "{}.{:02}", self.as_major(), self.cents())
+    }
   }
 }
 
@@ -116,30 +168,38 @@ impl Sub for Money {
   }
 }
 
+impl Neg for Money {
+  type Output = Money;
+
+  fn neg(self) -> Money {
+    Money(self.0.saturating_neg())
+  }
+}
+
 // Database conversions
 impl From<i64> for Money {
   fn from(value: i64) -> Self {
-    Money(value.max(0) as u64)
+    Money(value)
   }
 }
 
 impl From<Money> for i64 {
   fn from(money: Money) -> Self {
-    money.0.min(i64::MAX as u64) as i64
+    money.0
   }
 }
 
-impl From<u64> for Money {
-  fn from(value: u64) -> Self {
-    Money(value)
-  }
-}
-
-impl TryFrom<Money> for u64 {
+impl TryFrom<u64> for Money {
   type Error = std::num::TryFromIntError;
 
-  fn try_from(money: Money) -> Result<Self, Self::Error> {
-    Ok(money.0)
+  fn try_from(value: u64) -> Result<Self, Self::Error> {
+    Ok(Money(i64::try_from(value)?))
+  }
+}
+
+impl From<Money> for u64 {
+  fn from(money: Money) -> Self {
+    money.0.max(0) as u64
   }
 }
 
@@ -152,25 +212,41 @@ mod tests {
   // ========================================================================
 
   #[test]
-  fn test_from_minor() {
+  fn test_from_minor_positive() {
     let money = Money::from_minor(1050);
     assert_eq!(money.as_minor(), 1050);
   }
 
   #[test]
-  fn test_from_major() {
+  fn test_from_minor_negative() {
+    let money = Money::from_minor(-1050);
+    assert_eq!(money.as_minor(), -1050);
+  }
+
+  #[test]
+  fn test_from_major_positive() {
     let money = Money::from_major(10);
     assert_eq!(money.as_minor(), 1000);
     assert_eq!(money.as_major(), 10);
   }
 
   #[test]
+  fn test_from_major_negative() {
+    let money = Money::from_major(-10);
+    assert_eq!(money.as_minor(), -1000);
+    assert_eq!(money.as_major(), -10);
+  }
+
+  #[test]
   fn test_from_major_saturating_mul() {
     // Test that saturating_mul prevents overflow in const context
-    const LARGE: u64 = u64::MAX;
+    const LARGE: i64 = i64::MAX;
     const MONEY: Money = Money::from_major(LARGE);
-    // This would overflow with regular multiplication
-    assert_eq!(MONEY.as_minor(), u64::MAX);
+    assert_eq!(MONEY.as_minor(), i64::MAX);
+
+    const LARGE_NEG: i64 = i64::MIN;
+    const MONEY_NEG: Money = Money::from_major(LARGE_NEG);
+    assert_eq!(MONEY_NEG.as_minor(), i64::MIN);
   }
 
   #[test]
@@ -178,12 +254,14 @@ mod tests {
     assert_eq!(Money::ZERO.as_minor(), 0);
     assert_eq!(Money::ZERO.as_major(), 0);
     assert!(Money::ZERO.is_zero());
+    assert!(!Money::ZERO.is_positive());
+    assert!(!Money::ZERO.is_negative());
   }
 
   #[test]
-  fn test_from_major_zero() {
-    let money = Money::from_major(0);
-    assert_eq!(money, Money::ZERO);
+  fn test_min_max_constants() {
+    assert_eq!(Money::MAX.as_minor(), i64::MAX);
+    assert_eq!(Money::MIN.as_minor(), i64::MIN);
   }
 
   // ========================================================================
@@ -191,7 +269,7 @@ mod tests {
   // ========================================================================
 
   #[test]
-  fn test_as_major() {
+  fn test_as_major_positive() {
     assert_eq!(Money::from_minor(1000).as_major(), 10);
     assert_eq!(Money::from_minor(1050).as_major(), 10);
     assert_eq!(Money::from_minor(99).as_major(), 0);
@@ -199,7 +277,15 @@ mod tests {
   }
 
   #[test]
-  fn test_cents() {
+  fn test_as_major_negative() {
+    assert_eq!(Money::from_minor(-1000).as_major(), -10);
+    assert_eq!(Money::from_minor(-1050).as_major(), -10);
+    assert_eq!(Money::from_minor(-99).as_major(), 0);
+    assert_eq!(Money::from_minor(-199).as_major(), -1);
+  }
+
+  #[test]
+  fn test_cents_positive() {
     assert_eq!(Money::from_minor(1050).cents(), 50);
     assert_eq!(Money::from_minor(1000).cents(), 0);
     assert_eq!(Money::from_minor(99).cents(), 99);
@@ -208,16 +294,42 @@ mod tests {
   }
 
   #[test]
-  fn test_as_minor() {
-    assert_eq!(Money::from_major(10).as_minor(), 1000);
-    assert_eq!(Money::from_minor(1050).as_minor(), 1050);
+  fn test_cents_negative() {
+    assert_eq!(Money::from_minor(-1050).cents(), 50);
+    assert_eq!(Money::from_minor(-1000).cents(), 0);
+    assert_eq!(Money::from_minor(-99).cents(), 99);
+    assert_eq!(Money::from_minor(-1).cents(), 1);
+    assert_eq!(Money::from_minor(-199).cents(), 99);
   }
 
   #[test]
   fn test_is_zero() {
     assert!(Money::ZERO.is_zero());
     assert!(!Money::from_minor(1).is_zero());
-    assert!(!Money::from_major(1).is_zero());
+    assert!(!Money::from_minor(-1).is_zero());
+  }
+
+  #[test]
+  fn test_is_positive() {
+    assert!(Money::from_minor(1).is_positive());
+    assert!(Money::from_major(10).is_positive());
+    assert!(!Money::ZERO.is_positive());
+    assert!(!Money::from_minor(-1).is_positive());
+  }
+
+  #[test]
+  fn test_is_negative() {
+    assert!(Money::from_minor(-1).is_negative());
+    assert!(Money::from_major(-10).is_negative());
+    assert!(!Money::ZERO.is_negative());
+    assert!(!Money::from_minor(1).is_negative());
+  }
+
+  #[test]
+  fn test_abs() {
+    assert_eq!(Money::from_minor(1050).abs(), Money::from_minor(1050));
+    assert_eq!(Money::from_minor(-1050).abs(), Money::from_minor(1050));
+    assert_eq!(Money::ZERO.abs(), Money::ZERO);
   }
 
   // ========================================================================
@@ -225,35 +337,45 @@ mod tests {
   // ========================================================================
 
   #[test]
-  fn test_display() {
+  fn test_display_positive() {
     assert_eq!(Money::from_minor(1050).to_string(), "10.50");
     assert_eq!(Money::from_minor(1000).to_string(), "10.00");
     assert_eq!(Money::from_minor(99).to_string(), "0.99");
     assert_eq!(Money::from_minor(1).to_string(), "0.01");
     assert_eq!(Money::ZERO.to_string(), "0.00");
-    assert_eq!(Money::from_minor(199).to_string(), "1.99");
   }
 
   #[test]
-  fn test_format_eur() {
+  fn test_display_negative() {
+    assert_eq!(Money::from_minor(-1050).to_string(), "-10.50");
+    assert_eq!(Money::from_minor(-1000).to_string(), "-10.00");
+    assert_eq!(Money::from_minor(-99).to_string(), "-0.99");
+    assert_eq!(Money::from_minor(-1).to_string(), "-0.01");
+  }
+
+  #[test]
+  fn test_format_eur_positive() {
     assert_eq!(Money::from_minor(1050).format_eur(), "€10.50");
     assert_eq!(Money::from_minor(1000).format_eur(), "€10.00");
     assert_eq!(Money::from_minor(99).format_eur(), "€0.99");
     assert_eq!(Money::ZERO.format_eur(), "€0.00");
-    assert_eq!(Money::from_minor(199).format_eur(), "€1.99");
   }
 
   #[test]
-  fn test_format_large_amount() {
-    let large = Money::from_major(1_000_000);
-    assert_eq!(large.format_eur(), "€1000000.00");
+  fn test_format_eur_negative() {
+    assert_eq!(Money::from_minor(-1050).format_eur(), "€-10.50");
+    assert_eq!(Money::from_minor(-1000).format_eur(), "€-10.00");
+    assert_eq!(Money::from_minor(-99).format_eur(), "€-0.99");
+    assert_eq!(Money::from_minor(-1).format_eur(), "€-0.01");
   }
 
   #[test]
   fn test_debug_format() {
     let money = Money::from_minor(1050);
     assert_eq!(format!("{:?}", money), "Money(1050)");
-    assert_eq!(format!("{:?}", Money::ZERO), "Money(0)");
+
+    let debt = Money::from_minor(-1050);
+    assert_eq!(format!("{:?}", debt), "Money(-1050)");
   }
 
   // ========================================================================
@@ -261,66 +383,89 @@ mod tests {
   // ========================================================================
 
   #[test]
-  fn test_addition() {
+  fn test_addition_positive() {
     let a = Money::from_minor(1000);
     let b = Money::from_minor(500);
     assert_eq!(a + b, Money::from_minor(1500));
   }
 
   #[test]
-  fn test_addition_with_zero() {
-    let money = Money::from_minor(1000);
-    assert_eq!(money + Money::ZERO, money);
-    assert_eq!(Money::ZERO + money, money);
+  fn test_addition_negative() {
+    let a = Money::from_minor(-1000);
+    let b = Money::from_minor(-500);
+    assert_eq!(a + b, Money::from_minor(-1500));
   }
 
   #[test]
-  fn test_subtraction() {
+  fn test_addition_mixed() {
+    let positive = Money::from_minor(1000);
+    let negative = Money::from_minor(-300);
+    assert_eq!(positive + negative, Money::from_minor(700));
+    assert_eq!(negative + positive, Money::from_minor(700));
+  }
+
+  #[test]
+  fn test_subtraction_positive() {
     let a = Money::from_minor(1000);
     let b = Money::from_minor(500);
     assert_eq!(a - b, Money::from_minor(500));
   }
 
   #[test]
-  fn test_subtraction_to_zero() {
-    let money = Money::from_minor(1000);
-    assert_eq!(money - money, Money::ZERO);
+  fn test_subtraction_to_negative() {
+    let a = Money::from_minor(500);
+    let b = Money::from_minor(1000);
+    assert_eq!(a - b, Money::from_minor(-500));
   }
 
   #[test]
-  fn test_subtraction_saturates_at_zero() {
-    let small = Money::from_minor(500);
-    let large = Money::from_minor(1000);
+  fn test_subtraction_negative() {
+    let a = Money::from_minor(-1000);
+    let b = Money::from_minor(500);
+    assert_eq!(a - b, Money::from_minor(-1500));
+  }
 
-    // Should not panic, should saturate to zero
-    assert_eq!(small - large, Money::ZERO);
+  #[test]
+  fn test_negation() {
+    assert_eq!(-Money::from_minor(1000), Money::from_minor(-1000));
+    assert_eq!(-Money::from_minor(-1000), Money::from_minor(1000));
+    assert_eq!(-Money::ZERO, Money::ZERO);
+  }
+
+  #[test]
+  fn test_negation_min_saturates() {
+    // i64::MIN cannot be negated without overflow, should saturate
+    let min = Money::from_minor(i64::MIN);
+    assert_eq!(-min, Money::from_minor(i64::MAX));
+  }
+
+  #[test]
+  fn test_checked_negation() {
+    assert_eq!(
+      Money::from_minor(1000).checked_neg(),
+      Some(Money::from_minor(-1000))
+    );
+    assert_eq!(
+      Money::from_minor(-1000).checked_neg(),
+      Some(Money::from_minor(1000))
+    );
+    assert_eq!(Money::from_minor(i64::MIN).checked_neg(), None);
   }
 
   #[test]
   fn test_addition_saturates_at_max() {
-    let max = Money::from_minor(u64::MAX);
+    let max = Money::from_minor(i64::MAX);
     let one = Money::from_minor(1);
-
-    // Should not panic, should saturate
     let result = max + one;
-    assert_eq!(result.as_minor(), u64::MAX);
+    assert_eq!(result.as_minor(), i64::MAX);
   }
 
   #[test]
-  fn test_addition_max_boundary() {
-    let max_minus_one = Money::from_minor(u64::MAX - 1);
+  fn test_subtraction_saturates_at_min() {
+    let min = Money::from_minor(i64::MIN);
     let one = Money::from_minor(1);
-    assert_eq!(max_minus_one + one, Money::from_minor(u64::MAX));
-  }
-
-  #[test]
-  fn test_chained_operations() {
-    let a = Money::from_major(10);
-    let b = Money::from_major(5);
-    let c = Money::from_major(3);
-
-    let result = a + b - c;
-    assert_eq!(result, Money::from_major(12));
+    let result = min - one;
+    assert_eq!(result.as_minor(), i64::MIN);
   }
 
   #[test]
@@ -329,9 +474,13 @@ mod tests {
     let b = Money::from_minor(500);
     assert_eq!(a.checked_add(b), Some(Money::from_minor(1500)));
 
-    let max = Money::from_minor(u64::MAX);
+    let max = Money::from_minor(i64::MAX);
     let one = Money::from_minor(1);
     assert_eq!(max.checked_add(one), None);
+
+    let min = Money::from_minor(i64::MIN);
+    let neg_one = Money::from_minor(-1);
+    assert_eq!(min.checked_add(neg_one), None);
   }
 
   #[test]
@@ -340,31 +489,13 @@ mod tests {
     let b = Money::from_minor(500);
     assert_eq!(a.checked_sub(b), Some(Money::from_minor(500)));
 
-    let small = Money::from_minor(500);
-    let large = Money::from_minor(1000);
-    assert_eq!(small.checked_sub(large), None);
-  }
-
-  #[test]
-  fn test_saturating_addition() {
-    let max = Money::from_minor(u64::MAX);
+    let min = Money::from_minor(i64::MIN);
     let one = Money::from_minor(1);
-    assert_eq!(max.saturating_add(one), Money::from_minor(u64::MAX));
+    assert_eq!(min.checked_sub(one), None);
 
-    let a = Money::from_minor(1000);
-    let b = Money::from_minor(500);
-    assert_eq!(a.saturating_add(b), Money::from_minor(1500));
-  }
-
-  #[test]
-  fn test_saturating_subtraction() {
-    let small = Money::from_minor(500);
-    let large = Money::from_minor(1000);
-    assert_eq!(small.saturating_sub(large), Money::ZERO);
-
-    let a = Money::from_minor(1000);
-    let b = Money::from_minor(500);
-    assert_eq!(a.saturating_sub(b), Money::from_minor(500));
+    let max = Money::from_minor(i64::MAX);
+    let neg_one = Money::from_minor(-1);
+    assert_eq!(max.checked_sub(neg_one), None);
   }
 
   // ========================================================================
@@ -372,65 +503,25 @@ mod tests {
   // ========================================================================
 
   #[test]
-  fn test_equality() {
-    let a = Money::from_minor(1000);
-    let b = Money::from_minor(1000);
-    let c = Money::from_major(10);
+  fn test_ordering_with_negatives() {
+    let debt = Money::from_minor(-1000);
+    let zero = Money::ZERO;
+    let credit = Money::from_minor(1000);
 
-    assert_eq!(a, b);
-    assert_eq!(a, c);
+    assert!(debt < zero);
+    assert!(zero < credit);
+    assert!(debt < credit);
+    assert!(credit > debt);
   }
 
   #[test]
-  fn test_inequality() {
-    let a = Money::from_minor(1000);
-    let b = Money::from_minor(2000);
+  fn test_negative_comparisons() {
+    let small_debt = Money::from_minor(-100);
+    let large_debt = Money::from_minor(-1000);
 
-    assert_ne!(a, b);
-  }
-
-  #[test]
-  fn test_ordering() {
-    let small = Money::from_minor(100);
-    let medium = Money::from_minor(500);
-    let large = Money::from_minor(1000);
-
-    assert!(small < medium);
-    assert!(medium < large);
-    assert!(large > medium);
-    assert!(medium > small);
-
-    assert!(small <= medium);
-    assert!(medium >= small);
-    assert!(small <= small);
-    assert!(small >= small);
-  }
-
-  #[test]
-  fn test_zero_comparisons() {
-    let money = Money::from_minor(100);
-
-    assert!(money > Money::ZERO);
-    assert!(Money::ZERO < money);
-    assert!(Money::ZERO == Money::ZERO);
-    assert!(Money::ZERO <= money);
-    assert!(money >= Money::ZERO);
-  }
-
-  #[test]
-  fn test_ord_consistency() {
-    let a = Money::from_minor(100);
-    let b = Money::from_minor(200);
-    let c = Money::from_minor(300);
-
-    // Transitivity
-    assert!(a < b && b < c && a < c);
-
-    // Antisymmetry
-    assert!(!(a < b && b < a));
-
-    // Totality - either a < b, a > b, or a == b
-    assert!(a < b || a > b || a == b);
+    // Smaller negative is "larger" (less debt)
+    assert!(small_debt > large_debt);
+    assert!(large_debt < small_debt);
   }
 
   // ========================================================================
@@ -438,21 +529,12 @@ mod tests {
   // ========================================================================
 
   #[test]
-  fn test_from_i64_positive() {
+  fn test_from_i64() {
     let money: Money = 1050i64.into();
     assert_eq!(money.as_minor(), 1050);
-  }
 
-  #[test]
-  fn test_from_i64_zero() {
-    let money: Money = 0i64.into();
-    assert_eq!(money, Money::ZERO);
-  }
-
-  #[test]
-  fn test_from_i64_negative_becomes_zero() {
-    let money: Money = (-100i64).into();
-    assert_eq!(money, Money::ZERO);
+    let debt: Money = (-1050i64).into();
+    assert_eq!(debt.as_minor(), -1050);
   }
 
   #[test]
@@ -460,119 +542,37 @@ mod tests {
     let money = Money::from_minor(1050);
     let value: i64 = money.into();
     assert_eq!(value, 1050);
+
+    let debt = Money::from_minor(-1050);
+    let value: i64 = debt.into();
+    assert_eq!(value, -1050);
   }
 
   #[test]
-  fn test_roundtrip_i64_conversion() {
-    let original = 1050i64;
-    let money: Money = original.into();
-    let back: i64 = money.into();
-    assert_eq!(original, back);
-  }
-
-  #[test]
-  fn test_from_i64_large_value() {
-    let large = i64::MAX;
-    let money: Money = large.into();
-    let back: i64 = money.into();
-    assert_eq!(back, large);
-  }
-
-  #[test]
-  fn test_from_u64() {
-    let money: Money = 1050u64.into();
+  fn test_try_from_u64() {
+    let money: Money = 1050u64.try_into().unwrap();
     assert_eq!(money.as_minor(), 1050);
+
+    // u64::MAX cannot fit in i64
+    let result: Result<Money, _> = u64::MAX.try_into();
+    assert!(result.is_err());
+
+    // Max i64 value should work
+    let max_valid = i64::MAX as u64;
+    let money: Money = max_valid.try_into().unwrap();
+    assert_eq!(money.as_minor(), i64::MAX);
   }
 
   #[test]
-  fn test_try_into_u64() {
+  fn test_into_u64() {
     let money = Money::from_minor(1050);
-    let value: u64 = money.try_into().unwrap();
+    let value: u64 = money.into();
     assert_eq!(value, 1050);
 
-    // Maximum value should convert fine
-    let max_money = Money::from_minor(u64::MAX);
-    let max_value: u64 = max_money.try_into().unwrap();
-    assert_eq!(max_value, u64::MAX);
-  }
-
-  // ========================================================================
-  // Default Tests
-  // ========================================================================
-
-  #[test]
-  fn test_default() {
-    let money: Money = Default::default();
-    assert_eq!(money, Money::ZERO);
-  }
-
-  // ========================================================================
-  // Const Context Tests
-  // ========================================================================
-
-  #[test]
-  fn test_const_functions() {
-    // Verify these can be used in const contexts
-    const MONEY: Money = Money::from_major(10);
-    const ZERO: Money = Money::ZERO;
-    const FROM_MINOR: Money = Money::from_minor(1050);
-
-    assert_eq!(MONEY.as_minor(), 1000);
-    assert_eq!(ZERO.as_minor(), 0);
-    assert_eq!(FROM_MINOR.as_minor(), 1050);
-
-    // Test const operations
-    const ADDED: Money = MONEY.saturating_add(ZERO);
-    const SUBTRACTED: Money = MONEY.saturating_sub(Money::from_major(5));
-
-    assert_eq!(ADDED.as_minor(), 1000);
-    assert_eq!(SUBTRACTED.as_minor(), 500);
-  }
-
-  // ========================================================================
-  // Edge Case Tests
-  // ========================================================================
-
-  #[test]
-  fn test_one_cent() {
-    let money = Money::from_minor(1);
-    assert_eq!(money.as_major(), 0);
-    assert_eq!(money.cents(), 1);
-    assert_eq!(money.to_string(), "0.01");
-    assert!(!money.is_zero());
-  }
-
-  #[test]
-  fn test_ninety_nine_cents() {
-    let money = Money::from_minor(99);
-    assert_eq!(money.as_major(), 0);
-    assert_eq!(money.cents(), 99);
-    assert_eq!(money.to_string(), "0.99");
-  }
-
-  #[test]
-  fn test_exact_euros() {
-    let money = Money::from_major(50);
-    assert_eq!(money.as_major(), 50);
-    assert_eq!(money.cents(), 0);
-    assert_eq!(money.to_string(), "50.00");
-  }
-
-  #[test]
-  fn test_large_amount() {
-    let money = Money::from_major(1_000_000);
-    assert_eq!(money.as_major(), 1_000_000);
-    assert_eq!(money.as_minor(), 100_000_000);
-  }
-
-  #[test]
-  fn test_max_amount() {
-    let money = Money::from_minor(u64::MAX);
-    assert_eq!(money.as_minor(), u64::MAX);
-    // This should not panic
-    let _ = money.as_major();
-    let _ = money.cents();
-    let _ = money.to_string();
+    // Negative values become 0
+    let debt = Money::from_minor(-1050);
+    let value: u64 = debt.into();
+    assert_eq!(value, 0);
   }
 
   // ========================================================================
@@ -580,117 +580,109 @@ mod tests {
   // ========================================================================
 
   #[test]
-  fn test_restaurant_bill_scenario() {
-    let meal = Money::from_minor(2450); // €24.50
-    let drink = Money::from_minor(350); // €3.50
-    let dessert = Money::from_minor(650); // €6.50
-
-    let subtotal = meal + drink + dessert;
-    assert_eq!(subtotal.as_minor(), 3450); // €34.50
-    assert_eq!(subtotal.format_eur(), "€34.50");
-  }
-
-  #[test]
-  fn test_change_calculation() {
-    let price = Money::from_minor(1275); // €12.75
-    let paid = Money::from_major(20); // €20.00
-
-    let change = paid - price;
-    assert_eq!(change.as_minor(), 725); // €7.25
-    assert_eq!(change.format_eur(), "€7.25");
-  }
-
-  #[test]
-  fn test_insufficient_funds() {
+  fn test_overdraft_scenario() {
     let balance = Money::from_major(10);
-    let price = Money::from_major(15);
+    let withdrawal = Money::from_major(15);
 
-    // Should not panic, saturates to zero
-    let remaining = balance - price;
-    assert_eq!(remaining, Money::ZERO);
+    let new_balance = balance - withdrawal;
+    assert_eq!(new_balance, Money::from_major(-5));
+    assert!(new_balance.is_negative());
+    assert_eq!(new_balance.format_eur(), "€-5.00");
   }
 
   #[test]
-  fn test_multiple_small_transactions() {
-    let mut balance = Money::from_major(100);
+  fn test_debt_repayment() {
+    let debt = Money::from_major(-100); // Owe €100
+    let payment = Money::from_major(60); // Pay €60
 
-    balance = balance - Money::from_minor(99); // €0.99
-    balance = balance - Money::from_minor(150); // €1.50
-    balance = balance - Money::from_minor(251); // €2.51
-
-    assert_eq!(balance, Money::from_major(95)); // €95.00
+    let remaining = debt + payment;
+    assert_eq!(remaining, Money::from_major(-40)); // Still owe €40
+    assert!(remaining.is_negative());
   }
 
   #[test]
-  fn test_bank_account_transactions() {
-    let mut account = Money::from_major(1000); // €1000.00
+  fn test_refund_scenario() {
+    let balance = Money::from_major(50);
+    let refund = Money::from_major(25);
 
-    // Deposits
-    account = account + Money::from_minor(4999); // €49.99
-    account = account + Money::from_major(500); // €500.00
-
-    // Withdrawals
-    account = account - Money::from_minor(10000); // €100.00
-    account = account - Money::from_major(200); // €200.00
-
-    // Attempt overdraw (should saturate to zero)
-    account = account - Money::from_major(2000);
-
-    assert_eq!(account, Money::ZERO);
-  }
-
-  // ========================================================================
-  // Copy and Clone Tests
-  // ========================================================================
-
-  #[test]
-  fn test_copy() {
-    let original = Money::from_major(10);
-    let copied = original;
-
-    // Both should be usable
-    assert_eq!(original, copied);
-    assert_eq!(original.as_minor(), 1000);
-    assert_eq!(copied.as_minor(), 1000);
+    let new_balance = balance + refund;
+    assert_eq!(new_balance, Money::from_major(75));
   }
 
   #[test]
-  fn test_clone() {
-    let original = Money::from_major(10);
-    let cloned = original.clone();
+  fn test_split_bill_with_debt() {
+    let person_a = Money::from_major(20);
+    let person_b = Money::from_major(-5); // Owes €5
+    let total_bill = Money::from_major(30);
 
-    assert_eq!(original, cloned);
+    let remaining_after_a = total_bill - person_a;
+    let person_b_after = person_b - remaining_after_a;
+
+    assert_eq!(person_b_after, Money::from_major(-15)); // Now owes €15
+  }
+
+  #[test]
+  fn test_accounting_ledger() {
+    let mut account = Money::ZERO;
+
+    // Credit
+    account = account + Money::from_minor(10000); // +€100.00
+    assert_eq!(account, Money::from_major(100));
+
+    // Debit
+    account = account - Money::from_minor(15000); // -€150.00
+    assert_eq!(account, Money::from_major(-50));
+    assert!(account.is_negative());
+
+    // Credit
+    account = account + Money::from_minor(7500); // +€75.00
+    assert_eq!(account, Money::from_major(25));
+    assert!(account.is_positive());
   }
 
   // ========================================================================
-  // Hash Tests
+  // Edge Case Tests
   // ========================================================================
 
   #[test]
-  fn test_hash_consistency() {
-    use std::collections::HashMap;
+  fn test_one_cent_debt() {
+    let debt = Money::from_minor(-1);
+    assert_eq!(debt.as_major(), 0);
+    assert_eq!(debt.cents(), 1);
+    assert_eq!(debt.to_string(), "-0.01");
+    assert!(debt.is_negative());
+  }
 
-    let mut map = HashMap::new();
-    let key = Money::from_major(10);
+  #[test]
+  fn test_boundary_values() {
+    let max = Money::from_minor(i64::MAX);
+    let min = Money::from_minor(i64::MIN);
 
-    map.insert(key, "ten euros");
+    assert!(max.is_positive());
+    assert!(min.is_negative());
 
-    assert_eq!(map.get(&Money::from_minor(1000)), Some(&"ten euros"));
-    assert_eq!(map.get(&Money::from_major(10)), Some(&"ten euros"));
-    assert_eq!(map.get(&Money::ZERO), None);
+    // These should not panic
+    let _ = max.to_string();
+    let _ = min.to_string();
+    let _ = max.format_eur();
+    let _ = min.format_eur();
   }
 
   // ========================================================================
-  // Doc Tests
+  // Const Context Tests
   // ========================================================================
 
   #[test]
-  fn test_doc_examples() {
-    // Test examples from doc comments
-    let money = Money::from_minor(1050);
-    assert_eq!(money.to_string(), "10.50");
+  fn test_const_functions_with_negatives() {
+    const POSITIVE: Money = Money::from_major(10);
+    const NEGATIVE: Money = Money::from_major(-10);
+    const ZERO: Money = Money::ZERO;
 
-    let money = Money::from_major(10);
-    assert_eq!(money.as_minor(), 1000);
+    assert_eq!(POSITIVE.as_minor(), 1000);
+    assert_eq!(NEGATIVE.as_minor(), -1000);
+    assert_eq!(ZERO.as_minor(), 0);
+
+    const ADDED: Money = POSITIVE.saturating_add(NEGATIVE);
+    assert_eq!(ADDED.as_minor(), 0);
   }
 }

@@ -16,9 +16,9 @@ impl TransactionStore {
     let row = sqlx::query_as!(
       TransactionRow,
       r#"
-      INSERT INTO transactions (source_wallet_id, destination_wallet_id, executor_actor_id, amount, description)
+      INSERT INTO transactions (source_wallet_id, destination_wallet_id, executor_actor_id, amount_cents, description)
       VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, source_wallet_id, destination_wallet_id, executor_actor_id, amount, description, created_at, updated_at
+      RETURNING id, source_wallet_id, destination_wallet_id, executor_actor_id, amount_cents, description, created_at, updated_at
       "#,
       creation.source.into_inner(),
       creation.destination.into_inner(),
@@ -42,7 +42,7 @@ impl TransactionStore {
     let row = sqlx::query_as!(
       TransactionRow,
       r#"
-      SELECT id, source_wallet_id, destination_wallet_id, executor_actor_id, amount, description, created_at, updated_at
+      SELECT id, source_wallet_id, destination_wallet_id, executor_actor_id, amount_cents, description, created_at, updated_at
       FROM transactions
       WHERE id = $1
       "#,
@@ -64,7 +64,7 @@ impl TransactionStore {
     let rows = sqlx::query_as!(
       TransactionRow,
       r#"
-      SELECT id, source_wallet_id, destination_wallet_id, executor_actor_id, amount, description, created_at, updated_at
+      SELECT id, source_wallet_id, destination_wallet_id, executor_actor_id, amount_cents, description, created_at, updated_at
       FROM transactions
       WHERE source_wallet_id = $1 OR destination_wallet_id = $1
       ORDER BY created_at DESC
@@ -84,13 +84,13 @@ impl TransactionStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let balance = sqlx::query_scalar!(
+    let balance: Option<i64> = sqlx::query_scalar!(
       r#"
       SELECT
         COALESCE(SUM(
           CASE
-            WHEN destination_wallet_id = $1 THEN amount
-            WHEN source_wallet_id = $1 THEN -amount
+            WHEN destination_wallet_id = $1 THEN amount_cents
+            WHEN source_wallet_id = $1 THEN -amount_cents
             ELSE 0
           END
         ), 0) AS balance
@@ -102,6 +102,6 @@ impl TransactionStore {
     .fetch_one(executor)
     .await?;
 
-    Ok(Money::from_minor(balance.unwrap_or_default().max(0) as u64))
+    Ok(Money::from_minor(balance.unwrap_or_default().max(0)))
   }
 }
