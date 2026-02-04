@@ -18,7 +18,7 @@ pub(crate) struct ShopOfferingRow {
   pub shop_id: Uuid,
   pub name: String,
   pub description: Option<String>,
-  pub price_cents: i64,
+  pub price_cents: i32,
   pub created_at: DateTime<Utc>,
   pub updated_at: Option<DateTime<Utc>>,
 }

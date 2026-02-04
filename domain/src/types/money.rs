@@ -6,17 +6,17 @@ use std::ops::{Add, Neg, Sub};
 /// Can be positive (credit) or negative (debt).
 /// Stored as minor units (cents) internally.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Money(i64);
+pub struct Money(i32);
 
 impl Money {
   /// Zero money
   pub const ZERO: Money = Money(0);
 
   /// Maximum representable money value
-  pub const MAX: Money = Money(i64::MAX);
+  pub const MAX: Money = Money(i32::MAX);
 
   /// Minimum representable money value (maximum debt)
-  pub const MIN: Money = Money(i64::MIN);
+  pub const MIN: Money = Money(i32::MIN);
 
   /// Create Money from minor units (cents)
   ///
@@ -29,7 +29,7 @@ impl Money {
   /// let debt = Money::from_minor(-1050);
   /// assert_eq!(debt.to_string(), "-10.50");
   /// ```
-  pub const fn from_minor(cents: i64) -> Self {
+  pub const fn from_minor(cents: i32) -> Self {
     Self(cents)
   }
 
@@ -44,17 +44,17 @@ impl Money {
   /// let debt = Money::from_major(-10);
   /// assert_eq!(debt.as_minor(), -1000);
   /// ```
-  pub const fn from_major(euros: i64) -> Self {
+  pub const fn from_major(euros: i32) -> Self {
     Self(euros.saturating_mul(100))
   }
 
   /// Get the raw minor units value (cents)
-  pub const fn as_minor(&self) -> i64 {
+  pub const fn as_minor(&self) -> i32 {
     self.0
   }
 
   /// Get the major units (euros), preserving sign
-  pub const fn as_major(&self) -> i64 {
+  pub const fn as_major(&self) -> i32 {
     self.0 / 100
   }
 
@@ -177,13 +177,13 @@ impl Neg for Money {
 }
 
 // Database conversions
-impl From<i64> for Money {
-  fn from(value: i64) -> Self {
+impl From<i32> for Money {
+  fn from(value: i32) -> Self {
     Money(value)
   }
 }
 
-impl From<Money> for i64 {
+impl From<Money> for i32 {
   fn from(money: Money) -> Self {
     money.0
   }
@@ -193,7 +193,7 @@ impl TryFrom<u64> for Money {
   type Error = std::num::TryFromIntError;
 
   fn try_from(value: u64) -> Result<Self, Self::Error> {
-    Ok(Money(i64::try_from(value)?))
+    Ok(Money(i32::try_from(value)?))
   }
 }
 
@@ -240,13 +240,13 @@ mod tests {
   #[test]
   fn test_from_major_saturating_mul() {
     // Test that saturating_mul prevents overflow in const context
-    const LARGE: i64 = i64::MAX;
+    const LARGE: i32 = i32::MAX;
     const MONEY: Money = Money::from_major(LARGE);
-    assert_eq!(MONEY.as_minor(), i64::MAX);
+    assert_eq!(MONEY.as_minor(), i32::MAX);
 
-    const LARGE_NEG: i64 = i64::MIN;
+    const LARGE_NEG: i32 = i32::MIN;
     const MONEY_NEG: Money = Money::from_major(LARGE_NEG);
-    assert_eq!(MONEY_NEG.as_minor(), i64::MIN);
+    assert_eq!(MONEY_NEG.as_minor(), i32::MIN);
   }
 
   #[test]
@@ -260,8 +260,8 @@ mod tests {
 
   #[test]
   fn test_min_max_constants() {
-    assert_eq!(Money::MAX.as_minor(), i64::MAX);
-    assert_eq!(Money::MIN.as_minor(), i64::MIN);
+    assert_eq!(Money::MAX.as_minor(), i32::MAX);
+    assert_eq!(Money::MIN.as_minor(), i32::MIN);
   }
 
   // ========================================================================
@@ -434,9 +434,9 @@ mod tests {
 
   #[test]
   fn test_negation_min_saturates() {
-    // i64::MIN cannot be negated without overflow, should saturate
-    let min = Money::from_minor(i64::MIN);
-    assert_eq!(-min, Money::from_minor(i64::MAX));
+    // i32::MIN cannot be negated without overflow, should saturate
+    let min = Money::from_minor(i32::MIN);
+    assert_eq!(-min, Money::from_minor(i32::MAX));
   }
 
   #[test]
@@ -449,23 +449,23 @@ mod tests {
       Money::from_minor(-1000).checked_neg(),
       Some(Money::from_minor(1000))
     );
-    assert_eq!(Money::from_minor(i64::MIN).checked_neg(), None);
+    assert_eq!(Money::from_minor(i32::MIN).checked_neg(), None);
   }
 
   #[test]
   fn test_addition_saturates_at_max() {
-    let max = Money::from_minor(i64::MAX);
+    let max = Money::from_minor(i32::MAX);
     let one = Money::from_minor(1);
     let result = max + one;
-    assert_eq!(result.as_minor(), i64::MAX);
+    assert_eq!(result.as_minor(), i32::MAX);
   }
 
   #[test]
   fn test_subtraction_saturates_at_min() {
-    let min = Money::from_minor(i64::MIN);
+    let min = Money::from_minor(i32::MIN);
     let one = Money::from_minor(1);
     let result = min - one;
-    assert_eq!(result.as_minor(), i64::MIN);
+    assert_eq!(result.as_minor(), i32::MIN);
   }
 
   #[test]
@@ -474,11 +474,11 @@ mod tests {
     let b = Money::from_minor(500);
     assert_eq!(a.checked_add(b), Some(Money::from_minor(1500)));
 
-    let max = Money::from_minor(i64::MAX);
+    let max = Money::from_minor(i32::MAX);
     let one = Money::from_minor(1);
     assert_eq!(max.checked_add(one), None);
 
-    let min = Money::from_minor(i64::MIN);
+    let min = Money::from_minor(i32::MIN);
     let neg_one = Money::from_minor(-1);
     assert_eq!(min.checked_add(neg_one), None);
   }
@@ -489,11 +489,11 @@ mod tests {
     let b = Money::from_minor(500);
     assert_eq!(a.checked_sub(b), Some(Money::from_minor(500)));
 
-    let min = Money::from_minor(i64::MIN);
+    let min = Money::from_minor(i32::MIN);
     let one = Money::from_minor(1);
     assert_eq!(min.checked_sub(one), None);
 
-    let max = Money::from_minor(i64::MAX);
+    let max = Money::from_minor(i32::MAX);
     let neg_one = Money::from_minor(-1);
     assert_eq!(max.checked_sub(neg_one), None);
   }
@@ -529,22 +529,22 @@ mod tests {
   // ========================================================================
 
   #[test]
-  fn test_from_i64() {
-    let money: Money = 1050i64.into();
+  fn test_from_i32() {
+    let money: Money = 1050i32.into();
     assert_eq!(money.as_minor(), 1050);
 
-    let debt: Money = (-1050i64).into();
+    let debt: Money = (-1050i32).into();
     assert_eq!(debt.as_minor(), -1050);
   }
 
   #[test]
-  fn test_into_i64() {
+  fn test_into_i32() {
     let money = Money::from_minor(1050);
-    let value: i64 = money.into();
+    let value: i32 = money.into();
     assert_eq!(value, 1050);
 
     let debt = Money::from_minor(-1050);
-    let value: i64 = debt.into();
+    let value: i32 = debt.into();
     assert_eq!(value, -1050);
   }
 
@@ -553,14 +553,14 @@ mod tests {
     let money: Money = 1050u64.try_into().unwrap();
     assert_eq!(money.as_minor(), 1050);
 
-    // u64::MAX cannot fit in i64
+    // u64::MAX cannot fit in i32
     let result: Result<Money, _> = u64::MAX.try_into();
     assert!(result.is_err());
 
-    // Max i64 value should work
-    let max_valid = i64::MAX as u64;
+    // Max i32 value should work
+    let max_valid = i32::MAX as u64;
     let money: Money = max_valid.try_into().unwrap();
-    assert_eq!(money.as_minor(), i64::MAX);
+    assert_eq!(money.as_minor(), i32::MAX);
   }
 
   #[test]
@@ -655,8 +655,8 @@ mod tests {
 
   #[test]
   fn test_boundary_values() {
-    let max = Money::from_minor(i64::MAX);
-    let min = Money::from_minor(i64::MIN);
+    let max = Money::from_minor(i32::MAX);
+    let min = Money::from_minor(i32::MIN);
 
     assert!(max.is_positive());
     assert!(min.is_negative());

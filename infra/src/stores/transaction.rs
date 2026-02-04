@@ -23,7 +23,7 @@ impl TransactionStore {
       creation.source.into_inner(),
       creation.destination.into_inner(),
       creation.executor.as_ref().map(|e| e.into_inner()),
-      creation.amount.as_minor() as i64,
+      creation.amount.as_minor(),
       creation.description,
     )
     .fetch_one(executor)
@@ -86,22 +86,31 @@ impl TransactionStore {
   {
     let balance: Option<i64> = sqlx::query_scalar!(
       r#"
-      SELECT
-        COALESCE(SUM(
-          CASE
-            WHEN destination_wallet_id = $1 THEN amount_cents
-            WHEN source_wallet_id = $1 THEN -amount_cents
-            ELSE 0
-          END
-        ), 0) AS balance
-      FROM transactions
-      WHERE source_wallet_id = $1 OR destination_wallet_id = $1
-      "#,
+        SELECT
+          COALESCE(SUM(
+            CASE
+              WHEN destination_wallet_id = $1 THEN amount_cents
+              WHEN source_wallet_id = $1 THEN -amount_cents
+              ELSE 0
+            END
+          ), 0) AS balance
+        FROM transactions
+        WHERE source_wallet_id = $1 OR destination_wallet_id = $1
+        "#,
       wallet_id.into_inner(),
     )
     .fetch_one(executor)
     .await?;
 
-    Ok(Money::from_minor(balance.unwrap_or_default().max(0)))
+    let balance = balance.unwrap_or_default();
+    let balance_i32 = i32::try_from(balance).map_err(|_| sqlx::Error::ColumnDecode {
+      index: "balance".to_string(),
+      source: Box::new(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        format!("Balance overflow: {} cents exceeds i32 range", balance),
+      )),
+    })?;
+
+    Ok(Money::from_minor(balance_i32))
   }
 }
