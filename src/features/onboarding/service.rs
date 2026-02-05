@@ -55,9 +55,15 @@ impl OnboardingService {
     let expires_in = Duration::days(7);
 
     // Create invite
-    let invite =
-      InviteStore::create(&self.pool, invitor_id, email.clone(), token.clone(), role, expires_in)
-        .await?;
+    let invite = InviteStore::create(
+      &self.pool,
+      invitor_id,
+      email.clone(),
+      token.clone(),
+      role,
+      expires_in,
+    )
+    .await?;
 
     // Send email
     self

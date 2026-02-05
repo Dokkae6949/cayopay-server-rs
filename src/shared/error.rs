@@ -106,11 +106,7 @@ impl IntoResponse for ApiError {
         "Authentication failed".to_string(),
         None,
       ),
-      AppError::Unauthorized => (
-        StatusCode::UNAUTHORIZED,
-        "Unauthorized".to_string(),
-        None,
-      ),
+      AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized".to_string(), None),
       AppError::Authorization => (StatusCode::FORBIDDEN, "Permission denied".to_string(), None),
       AppError::UserAlreadyExists => (
         StatusCode::CONFLICT,

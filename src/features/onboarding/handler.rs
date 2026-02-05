@@ -1,5 +1,6 @@
 use axum::{
   extract::{Path, State},
+  http::StatusCode,
   routing::{get, post},
   Json, Router,
 };
@@ -10,6 +11,21 @@ use crate::shared::state::AppState;
 use domain::{Email, Permission, RawPassword};
 
 use super::models::{AcceptInviteRequest, InviteRequest, InviteResponse};
+
+/// Helper extractor that provides state without consuming request body
+struct StateOnly(AppState);
+
+#[axum::async_trait]
+impl axum::extract::FromRequestParts<AppState> for StateOnly {
+  type Rejection = std::convert::Infallible;
+
+  async fn from_request_parts(
+    _parts: &mut axum::http::request::Parts,
+    state: &AppState,
+  ) -> Result<Self, Self::Rejection> {
+    Ok(StateOnly(state.clone()))
+  }
+}
 
 /// Send an invitation to join the platform
 #[utoipa::path(
@@ -27,7 +43,6 @@ use super::models::{AcceptInviteRequest, InviteRequest, InviteResponse};
   )
 )]
 pub async fn send_invite(
-  State(state): State<AppState>,
   authz: Authz,
   ValidatedJson(payload): ValidatedJson<InviteRequest>,
 ) -> AppResult<()> {
@@ -36,11 +51,12 @@ pub async fn send_invite(
   authz.can_assign(payload.role)?;
 
   let email = Email::new(payload.email);
-  let user = authz.0;
+  let user_id = authz.user.id;
 
-  state
+  authz
+    .state
     .onboarding_service
-    .send_invite(user.id, email, payload.role)
+    .send_invite(user_id, email, payload.role)
     .await?;
 
   Ok(())
@@ -59,13 +75,10 @@ pub async fn send_invite(
     ("session_cookie" = [])
   )
 )]
-pub async fn get_invites(
-  State(state): State<AppState>,
-  authz: Authz,
-) -> AppResult<Json<Vec<InviteResponse>>> {
+pub async fn get_invites(authz: Authz) -> AppResult<Json<Vec<InviteResponse>>> {
   authz.require(Permission::ViewInvite)?;
 
-  let invites = state.onboarding_service.get_all_invites().await?;
+  let invites = authz.state.onboarding_service.get_all_invites().await?;
 
   Ok(Json(invites))
 }
@@ -85,7 +98,7 @@ pub async fn get_invites(
   ),
 )]
 pub async fn accept_invite(
-  State(state): State<AppState>,
+  StateOnly(state): StateOnly,
   Path(token): Path<String>,
   ValidatedJson(payload): ValidatedJson<AcceptInviteRequest>,
 ) -> AppResult<()> {

@@ -1,4 +1,4 @@
-use axum::{extract::State, routing::get, Json, Router};
+use axum::{http::StatusCode, routing::get, Json, Router};
 
 use crate::shared::error::AppResult;
 use crate::shared::extractors::Authz;
@@ -20,13 +20,10 @@ use super::models::GuestDetailResponse;
     ("session_cookie" = [])
   )
 )]
-pub async fn list_guests(
-  State(state): State<AppState>,
-  authz: Authz,
-) -> AppResult<Json<Vec<GuestDetailResponse>>> {
+pub async fn list_guests(authz: Authz) -> AppResult<Json<Vec<GuestDetailResponse>>> {
   authz.require(Permission::ReadGuestDetails)?;
 
-  let guests = state.guest_management_service.list_guests().await?;
+  let guests = authz.state.guest_management_service.list_guests().await?;
 
   Ok(Json(guests))
 }
