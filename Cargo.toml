@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# Domain types
+# Domain (kept separate for shared types)
 domain = { path = "./domain" }
 
 # Web Framework
@@ -47,10 +47,15 @@ envy = "0.4"
 # Security
 argon2 = { version = "0.5", features = ["std"] }
 
-# Mailing
-lettre = { version = "0.11.19", default-features = false, features = ["tokio1", "tokio1-rustls-tls", "builder", "smtp-transport", "pool"] }
+# Email
+lettre = { version = "0.11.19", default-features = false, features = [
+    "tokio1",
+    "tokio1-rustls-tls",
+    "builder",
+    "smtp-transport",
+    "pool"
+] }
 
 # OpenAPI
 utoipa = { version = "4.2", features = ["axum_extras", "uuid", "chrono"] }
 utoipa-swagger-ui = { version = "7.0", features = ["axum"] }
-
