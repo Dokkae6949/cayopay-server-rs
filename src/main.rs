@@ -1,6 +1,5 @@
-use application::{config::Config, state::AppState};
+use cayopay_server::{router, shared::AppState, shared::Config};
 use domain::{wallet::WalletLabel, Role};
-use infra::stores::{models::WalletCreation, WalletStore};
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -37,14 +36,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   }
 
   // Initialize application state
-  let state = AppState::new(&config, pool);
+  let state = AppState::new(&config, pool.clone());
 
-  // Seed databasse
+  // Seed database
   seed_owner(&state).await?;
-  seed_wallets(&state).await?;
+  seed_wallets(&pool).await?;
 
   // Create router
-  let app = api::router(state);
+  let app = router(state);
 
   // Start server
   let addr_str = config.server_addr();
@@ -98,7 +97,7 @@ async fn seed_owner(state: &AppState) -> Result<(), Box<dyn std::error::Error>> 
     .await
   {
     Ok(_) => tracing::info!("Seeded default owner user"),
-    Err(application::error::AppError::UserAlreadyExists) => {
+    Err(cayopay_server::shared::AppError::UserAlreadyExists) => {
       tracing::debug!("Default owner user already exists");
     }
     Err(e) => {
@@ -109,18 +108,11 @@ async fn seed_owner(state: &AppState) -> Result<(), Box<dyn std::error::Error>> 
   Ok(())
 }
 
-async fn seed_wallets(state: &AppState) -> Result<(), Box<dyn std::error::Error>> {
+async fn seed_wallets(pool: &sqlx::PgPool) -> Result<(), Box<dyn std::error::Error>> {
+  use cayopay_server::shared::stores::WalletStore;
+
   for label in WalletLabel::variants() {
-    match WalletStore::create(
-      &state.pool,
-      &WalletCreation {
-        owner: None,
-        label: Some(label.clone()),
-        allow_overdraft: true,
-      },
-    )
-    .await
-    {
+    match WalletStore::create(pool, None, Some(label.clone()), true).await {
       Ok(_) => tracing::info!("Seeded wallet with label {:?}", label),
       Err(sqlx::Error::Database(db_err))
         if db_err.kind() == sqlx::error::ErrorKind::UniqueViolation =>
