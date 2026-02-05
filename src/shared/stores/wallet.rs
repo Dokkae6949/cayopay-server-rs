@@ -4,7 +4,7 @@ use domain::{
 };
 use sqlx::{Executor, Postgres};
 
-use crate::stores::models::wallet::{WalletRow, WalletUpdate};
+use crate::shared::stores::models::wallet::{WalletRow, WalletUpdate};
 
 pub struct WalletStore;
 

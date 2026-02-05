@@ -20,6 +20,7 @@ use super::models::UserDetailResponse;
     ("session_cookie" = [])
   )
 )]
+#[axum::debug_handler]
 pub async fn list_users(authz: Authz) -> AppResult<Json<Vec<UserDetailResponse>>> {
   authz.require(Permission::ReadUserDetails)?;
 
@@ -30,5 +31,5 @@ pub async fn list_users(authz: Authz) -> AppResult<Json<Vec<UserDetailResponse>>
 
 /// Create router for user management endpoints
 pub fn router() -> Router<AppState> {
-  Router::new().route("/", get(list_users))
+  Router::<AppState>::new().route("/", get(list_users))
 }

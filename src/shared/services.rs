@@ -1,3 +1,1 @@
-mod email_service;
-
-pub use email_service::{EmailService, EmailServiceConfig};
+pub use crate::shared::email::{EmailService, EmailServiceConfig};

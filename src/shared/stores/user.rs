@@ -1,6 +1,6 @@
 use sqlx::{Executor, Postgres};
 
-use crate::stores::models::user::{UserRow, UserUpdate};
+use crate::shared::stores::models::user::{UserRow, UserUpdate};
 use domain::{ActorId, Email, HashedPassword, Role, User, UserId};
 
 pub struct UserStore;

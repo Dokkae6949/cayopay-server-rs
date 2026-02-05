@@ -57,6 +57,12 @@ pub enum AppError {
 }
 
 // Email service error wrapper
+impl From<crate::shared::email::EmailError> for AppError {
+  fn from(e: crate::shared::email::EmailError) -> Self {
+    AppError::Email(e.to_string())
+  }
+}
+
 impl From<lettre::transport::smtp::Error> for AppError {
   fn from(e: lettre::transport::smtp::Error) -> Self {
     AppError::Email(e.to_string())

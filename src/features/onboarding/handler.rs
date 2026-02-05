@@ -1,5 +1,5 @@
 use axum::{
-  extract::{Path, State},
+  extract::Path,
   http::StatusCode,
   routing::{get, post},
   Json, Router,
@@ -42,6 +42,7 @@ impl axum::extract::FromRequestParts<AppState> for StateOnly {
     ("session_cookie" = [])
   )
 )]
+#[axum::debug_handler]
 pub async fn send_invite(
   authz: Authz,
   ValidatedJson(payload): ValidatedJson<InviteRequest>,
@@ -75,6 +76,7 @@ pub async fn send_invite(
     ("session_cookie" = [])
   )
 )]
+#[axum::debug_handler]
 pub async fn get_invites(authz: Authz) -> AppResult<Json<Vec<InviteResponse>>> {
   authz.require(Permission::ViewInvite)?;
 
@@ -97,6 +99,7 @@ pub async fn get_invites(authz: Authz) -> AppResult<Json<Vec<InviteResponse>>> {
     (status = StatusCode::NOT_FOUND, description = "Invite not found"),
   ),
 )]
+#[axum::debug_handler]
 pub async fn accept_invite(
   StateOnly(state): StateOnly,
   Path(token): Path<String>,
@@ -117,7 +120,7 @@ pub async fn accept_invite(
 
 /// Create router for onboarding/invite endpoints
 pub fn router() -> Router<AppState> {
-  Router::new()
+  Router::<AppState>::new()
     .route("/", post(send_invite))
     .route("/", get(get_invites))
     .route("/:token/accept", post(accept_invite))

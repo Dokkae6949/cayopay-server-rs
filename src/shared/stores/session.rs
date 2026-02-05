@@ -2,7 +2,7 @@ use chrono::Duration;
 use domain::{Session, SessionId, UserId};
 use sqlx::{Executor, Postgres};
 
-use crate::stores::models::session::SessionRow;
+use crate::shared::stores::models::session::SessionRow;
 
 pub struct SessionStore;
 

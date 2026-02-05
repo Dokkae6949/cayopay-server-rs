@@ -1,7 +1,7 @@
 use domain::{transaction::TransactionId, types::Money, wallet::WalletId, Transaction};
 use sqlx::{Executor, Postgres};
 
-use crate::stores::models::transaction::{TransactionCreation, TransactionRow};
+use crate::shared::stores::models::transaction::{TransactionCreation, TransactionRow};
 
 pub struct TransactionStore;
 

@@ -1,5 +1,4 @@
 use axum::{
-  extract::State,
   http::StatusCode,
   routing::{get, post},
   Json, Router,
@@ -12,7 +11,6 @@ use crate::shared::state::AppState;
 use domain::{Email, RawPassword};
 
 use super::models::{LoginRequest, UserResponse};
-use super::service::AuthService;
 
 /// Helper extractor that provides state and cookie jar without consuming request body
 struct LoginContext {
@@ -50,6 +48,7 @@ impl axum::extract::FromRequestParts<AppState> for LoginContext {
     (status = StatusCode::UNAUTHORIZED, description = "Invalid credentials"),
   )
 )]
+#[axum::debug_handler]
 pub async fn login(
   ctx: LoginContext,
   ValidatedJson(payload): ValidatedJson<LoginRequest>,
@@ -88,13 +87,14 @@ pub async fn login(
     ("session_cookie" = [])
   )
 )]
+#[axum::debug_handler]
 pub async fn me(Authn(user): Authn) -> AppResult<Json<UserResponse>> {
   Ok(Json(user.into()))
 }
 
 /// Create router for auth endpoints
 pub fn router() -> Router<AppState> {
-  Router::new()
+  Router::<AppState>::new()
     .route("/login", post(login))
     .route("/me", get(me))
 }

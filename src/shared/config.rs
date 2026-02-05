@@ -77,8 +77,8 @@ impl Config {
     format!("{}:{}", self.host, self.port)
   }
 
-  pub fn email_config(&self) -> crate::services::EmailServiceConfig {
-    crate::services::EmailServiceConfig {
+  pub fn email_config(&self) -> super::services::EmailServiceConfig {
+    super::services::EmailServiceConfig {
       host: self.smtp_host.clone(),
       port: self.smtp_port,
       username: self.smtp_username.expose().to_string(),

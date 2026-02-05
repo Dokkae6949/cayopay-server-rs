@@ -20,6 +20,7 @@ use super::models::GuestDetailResponse;
     ("session_cookie" = [])
   )
 )]
+#[axum::debug_handler]
 pub async fn list_guests(authz: Authz) -> AppResult<Json<Vec<GuestDetailResponse>>> {
   authz.require(Permission::ReadGuestDetails)?;
 
@@ -30,5 +31,5 @@ pub async fn list_guests(authz: Authz) -> AppResult<Json<Vec<GuestDetailResponse
 
 /// Create router for guest management endpoints
 pub fn router() -> Router<AppState> {
-  Router::new().route("/", get(list_guests))
+  Router::<AppState>::new().route("/", get(list_guests))
 }

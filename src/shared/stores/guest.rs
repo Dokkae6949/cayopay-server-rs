@@ -1,6 +1,6 @@
 use sqlx::{Executor, Postgres};
 
-use crate::stores::models::guest::{GuestCreation, GuestRow, GuestUpdate};
+use crate::shared::stores::models::guest::{GuestCreation, GuestRow, GuestUpdate};
 use domain::{guest::GuestId, ActorId, Guest};
 
 pub struct GuestStore;

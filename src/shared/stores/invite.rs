@@ -2,7 +2,7 @@ use chrono::Duration;
 use domain::{Email, Invite, InviteId, Role, UserId};
 use sqlx::{Executor, Postgres};
 
-use crate::stores::models::invite::{InviteRow, InviteUpdate};
+use crate::shared::stores::models::invite::{InviteRow, InviteUpdate};
 
 pub struct InviteStore;
 

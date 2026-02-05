@@ -125,7 +125,7 @@ impl OnboardingService {
       responses.push(InviteResponse {
         id: invite.id,
         invitor_id: invite.invitor,
-        invitor_name,
+        invitor_name: inviter_name,
         email: invite.email,
         token: invite.token,
         role: invite.role,

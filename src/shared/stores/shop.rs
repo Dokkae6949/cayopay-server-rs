@@ -1,6 +1,6 @@
 use sqlx::{Executor, Postgres};
 
-use crate::stores::models::shop::{
+use crate::shared::stores::models::shop::{
   ShopCreation, ShopMemberRow, ShopOfferingCreation, ShopOfferingRow, ShopOfferingUpdate, ShopRow,
   ShopUpdate,
 };

@@ -1,4 +1,4 @@
-use domain::{Email, HashedPassword, Role, User, UserId};
+use domain::{Email, Role, User, UserId};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
