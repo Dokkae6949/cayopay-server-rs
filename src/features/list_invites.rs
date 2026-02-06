@@ -1,7 +1,7 @@
 //! List Invites Feature
 //!
 //! Business capability: View all pending invitations (admin feature)
-//! Uses shared AuthzContext to avoid repeated session/auth checks
+//! Uses shared AuthContext to avoid repeated session/auth checks
 
 use axum::{http::StatusCode, response::IntoResponse, Json, Router, routing::get};
 use serde::Serialize;
@@ -10,7 +10,7 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::shared::AuthzContext;
+use crate::shared::AuthContext;
 use domain::{Permission, Role};
 
 // ===== DTOs (rich data) =====
@@ -85,13 +85,13 @@ async fn list_invites(pool: &PgPool) -> Result<Vec<InviteRow>, sqlx::Error> {
     security(("session_cookie" = []))
 )]
 pub async fn handle(
-    authz: AuthzContext,
+    auth: AuthContext,
 ) -> Result<Json<Vec<InviteResponse>>, Error> {
-    // Check permissions (AuthzContext already has user loaded!)
-    authz.require(Permission::ViewInvite)?;
+    // Check permissions (AuthContext already has user loaded!)
+    auth.require(Permission::ViewInvite)?;
     
     // Get invites with rich data
-    let invites = list_invites(&authz.pool).await?;
+    let invites = list_invites(&auth.pool).await?;
     
     let response = invites
         .into_iter()

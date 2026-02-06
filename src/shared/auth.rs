@@ -1,16 +1,17 @@
-//! Shared Authentication Contexts
+//! Shared Authentication Context
 //!
-//! Provides AuthnContext and AuthzContext extractors to avoid repeated session fetching.
-//! These are minimal shared infrastructure that eliminates duplication without adding complexity.
+//! Provides AuthContext extractor to avoid repeated session fetching.
+//! This is minimal shared infrastructure that eliminates duplication without adding complexity.
 
-use axum::{async_trait, extract::{FromRequestParts, Request}, http::request::Parts, RequestPartsExt};
+use axum::{async_trait, extract::FromRequestParts, http::request::Parts, RequestPartsExt};
 use axum_extra::extract::CookieJar;
+use chrono::{DateTime, Duration, Utc};
 use sqlx::PgPool;
 use std::ops::Deref;
 use thiserror::Error;
 use uuid::Uuid;
 
-use domain::{Permission, Role, User};
+use domain::{Id, Permission, Role, Session, User};
 
 // ===== Errors =====
 
@@ -41,21 +42,20 @@ impl axum::response::IntoResponse for AuthError {
     }
 }
 
-// ===== AuthnContext (Authentication) =====
+// ===== AuthContext (Authentication & Authorization) =====
 
-/// Authentication context - validates session and provides user info
+/// Authentication & Authorization context
 /// 
-/// Extracts and validates session from cookie, fetches user data.
-/// Use this when you need to know WHO the user is.
+/// Validates session and provides user info + permission checking helpers.
+/// Combines both authentication (WHO is the user) and authorization (WHAT can they do).
 #[derive(Debug, Clone)]
-pub struct AuthnContext {
-    pub session_id: String,
-    pub user_id: Uuid,
+pub struct AuthContext {
+    pub session: Session,
     pub user: User,
     pub pool: PgPool,
 }
 
-impl Deref for AuthnContext {
+impl Deref for AuthContext {
     type Target = User;
     
     fn deref(&self) -> &Self::Target {
@@ -63,10 +63,54 @@ impl Deref for AuthnContext {
     }
 }
 
+impl AuthContext {
+    /// Check if user has a specific permission
+    pub fn require(&self, permission: Permission) -> Result<(), AuthError> {
+        if self.user.role.has_permission(permission) {
+            Ok(())
+        } else {
+            Err(AuthError::Forbidden)
+        }
+    }
+    
+    /// Check if user can assign a specific role
+    pub fn can_assign(&self, target_role: Role) -> Result<(), AuthError> {
+        if self.user.role.can_assign_role(target_role) {
+            Ok(())
+        } else {
+            Err(AuthError::Forbidden)
+        }
+    }
+    
+    /// Check if user has any of the given permissions
+    pub fn require_any(&self, permissions: &[Permission]) -> Result<(), AuthError> {
+        if permissions.iter().any(|p| self.user.role.has_permission(*p)) {
+            Ok(())
+        } else {
+            Err(AuthError::Forbidden)
+        }
+    }
+    
+    /// Check if user has all of the given permissions
+    pub fn require_all(&self, permissions: &[Permission]) -> Result<(), AuthError> {
+        if permissions.iter().all(|p| self.user.role.has_permission(*p)) {
+            Ok(())
+        } else {
+            Err(AuthError::Forbidden)
+        }
+    }
+}
+
 #[derive(Debug, sqlx::FromRow)]
 struct SessionRow {
+    id: Uuid,
     user_id: Uuid,
-    expires_at: chrono::DateTime<chrono::Utc>,
+    token: String,
+    user_agent: Option<String>,
+    ip_address: Option<String>,
+    expires_in_seconds: i64,
+    created_at: DateTime<Utc>,
+    updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -98,8 +142,23 @@ impl From<UserRow> for User {
     }
 }
 
+impl From<SessionRow> for Session {
+    fn from(row: SessionRow) -> Self {
+        Session {
+            id: Id::from(row.id),
+            user_id: Id::from(row.user_id),
+            token: row.token,
+            user_agent: row.user_agent,
+            ip_address: row.ip_address,
+            expires_in: Duration::seconds(row.expires_in_seconds),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
+}
+
 #[async_trait]
-impl FromRequestParts<PgPool> for AuthnContext {
+impl FromRequestParts<PgPool> for AuthContext {
     type Rejection = AuthError;
 
     async fn from_request_parts(
@@ -119,16 +178,21 @@ impl FromRequestParts<PgPool> for AuthnContext {
             .value();
         
         // Fetch session
-        let session: SessionRow = sqlx::query_as(
-            "SELECT user_id, expires_at FROM sessions WHERE token = $1"
+        let session_row: SessionRow = sqlx::query_as(
+            "SELECT id, user_id, token, user_agent, ip_address, \
+             EXTRACT(EPOCH FROM (expires_at - created_at))::bigint as expires_in_seconds, \
+             created_at, updated_at \
+             FROM sessions WHERE token = $1"
         )
         .bind(token)
         .fetch_optional(pool)
         .await?
         .ok_or(AuthError::Unauthorized)?;
         
+        let session: Session = session_row.into();
+        
         // Check expiry
-        if session.expires_at < chrono::Utc::now() {
+        if session.is_expired() {
             return Err(AuthError::Unauthorized);
         }
         
@@ -137,86 +201,15 @@ impl FromRequestParts<PgPool> for AuthnContext {
             "SELECT id, actor_id, email, password_hash, first_name, last_name, role, created_at, updated_at \
              FROM users WHERE id = $1"
         )
-        .bind(session.user_id)
+        .bind(session.user_id.into_inner())
         .fetch_optional(pool)
         .await?
         .ok_or(AuthError::Unauthorized)?;
         
-        Ok(AuthnContext {
-            session_id: token.to_string(),
-            user_id: session.user_id,
+        Ok(AuthContext {
+            session,
             user: user_row.into(),
             pool: pool.clone(),
         })
-    }
-}
-
-// ===== AuthzContext (Authorization) =====
-
-/// Authorization context - authentication + permission checking
-/// 
-/// Includes AuthnContext data plus helper methods for permission checks.
-/// Use this when you need to check WHAT the user can do.
-#[derive(Debug, Clone)]
-pub struct AuthzContext {
-    pub authn: AuthnContext,
-}
-
-impl Deref for AuthzContext {
-    type Target = AuthnContext;
-    
-    fn deref(&self) -> &Self::Target {
-        &self.authn
-    }
-}
-
-impl AuthzContext {
-    /// Check if user has a specific permission
-    pub fn require(&self, permission: Permission) -> Result<(), AuthError> {
-        if self.authn.user.role.has_permission(permission) {
-            Ok(())
-        } else {
-            Err(AuthError::Forbidden)
-        }
-    }
-    
-    /// Check if user can assign a specific role
-    pub fn can_assign(&self, target_role: Role) -> Result<(), AuthError> {
-        if self.authn.user.role.can_assign_role(target_role) {
-            Ok(())
-        } else {
-            Err(AuthError::Forbidden)
-        }
-    }
-    
-    /// Check if user has any of the given permissions
-    pub fn require_any(&self, permissions: &[Permission]) -> Result<(), AuthError> {
-        if permissions.iter().any(|p| self.authn.user.role.has_permission(*p)) {
-            Ok(())
-        } else {
-            Err(AuthError::Forbidden)
-        }
-    }
-    
-    /// Check if user has all of the given permissions
-    pub fn require_all(&self, permissions: &[Permission]) -> Result<(), AuthError> {
-        if permissions.iter().all(|p| self.authn.user.role.has_permission(*p)) {
-            Ok(())
-        } else {
-            Err(AuthError::Forbidden)
-        }
-    }
-}
-
-#[async_trait]
-impl FromRequestParts<PgPool> for AuthzContext {
-    type Rejection = AuthError;
-
-    async fn from_request_parts(
-        parts: &mut Parts,
-        pool: &PgPool,
-    ) -> Result<Self, Self::Rejection> {
-        let authn = AuthnContext::from_request_parts(parts, pool).await?;
-        Ok(AuthzContext { authn })
     }
 }

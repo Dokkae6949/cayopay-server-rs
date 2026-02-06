@@ -1,7 +1,7 @@
 //! List Users Feature
 //!
 //! Business capability: View all users (admin feature)
-//! Uses shared AuthzContext to avoid repeated session/auth checks
+//! Uses shared AuthContext to avoid repeated session/auth checks
 
 use axum::{http::StatusCode, response::IntoResponse, Json, Router, routing::get};
 use serde::Serialize;
@@ -10,7 +10,7 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::shared::AuthzContext;
+use crate::shared::AuthContext;
 use domain::{Permission, Role};
 
 // ===== DTOs =====
@@ -78,13 +78,13 @@ async fn list_all_users(pool: &PgPool) -> Result<Vec<UserRow>, sqlx::Error> {
     security(("session_cookie" = []))
 )]
 pub async fn handle(
-    authz: AuthzContext,
+    auth: AuthContext,
 ) -> Result<Json<Vec<UserResponse>>, Error> {
     // Check permissions
-    authz.require(Permission::ReadUserDetails)?;
+    auth.require(Permission::ReadUserDetails)?;
     
     // Get users
-    let users = list_all_users(&authz.pool).await?;
+    let users = list_all_users(&auth.pool).await?;
     
     let response = users
         .into_iter()

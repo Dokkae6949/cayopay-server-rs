@@ -1,7 +1,7 @@
 //! List Guests Feature
 //!
 //! Business capability: View all guests (admin feature)
-//! Uses shared AuthzContext to avoid repeated session/auth checks
+//! Uses shared AuthContext to avoid repeated session/auth checks
 
 use axum::{http::StatusCode, response::IntoResponse, Json, Router, routing::get};
 use serde::Serialize;
@@ -10,7 +10,7 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::shared::AuthzContext;
+use crate::shared::AuthContext;
 use domain::Permission;
 
 // ===== DTOs =====
@@ -74,13 +74,13 @@ async fn list_all_guests(pool: &PgPool) -> Result<Vec<GuestRow>, sqlx::Error> {
     security(("session_cookie" = []))
 )]
 pub async fn handle(
-    authz: AuthzContext,
+    auth: AuthContext,
 ) -> Result<Json<Vec<GuestResponse>>, Error> {
     // Check permissions
-    authz.require(Permission::ReadGuestDetails)?;
+    auth.require(Permission::ReadGuestDetails)?;
     
     // Get guests
-    let guests = list_all_guests(&authz.pool).await?;
+    let guests = list_all_guests(&auth.pool).await?;
     
     let response = guests
         .into_iter()

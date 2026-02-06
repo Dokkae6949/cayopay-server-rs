@@ -1,7 +1,7 @@
 //! Current User Feature
 //!
 //! Business capability: Get currently authenticated user's information
-//! Uses shared AuthnContext to avoid repeated session fetching
+//! Uses shared AuthContext to avoid repeated session fetching
 
 use axum::{http::StatusCode, response::IntoResponse, Json, Router, routing::get};
 use serde::Serialize;
@@ -9,7 +9,7 @@ use sqlx::PgPool;
 use thiserror::Error;
 use utoipa::ToSchema;
 
-use crate::shared::AuthnContext;
+use crate::shared::AuthContext;
 use domain::Role;
 
 // ===== DTOs =====
@@ -51,15 +51,15 @@ impl IntoResponse for Error {
     security(("session_cookie" = []))
 )]
 pub async fn handle(
-    authn: AuthnContext,
+    auth: AuthContext,
 ) -> Result<Json<ResponseDto>, Error> {
-    // User info is already fetched by AuthnContext!
+    // User info is already fetched by AuthContext!
     Ok(Json(ResponseDto {
-        id: authn.user.id.to_string(),
-        email: authn.user.email.expose().to_string(),
-        first_name: authn.user.first_name.clone(),
-        last_name: authn.user.last_name.clone(),
-        role: authn.user.role,
+        id: auth.user.id.to_string(),
+        email: auth.user.email.expose().to_string(),
+        first_name: auth.user.first_name.clone(),
+        last_name: auth.user.last_name.clone(),
+        role: auth.user.role,
     }))
 }
 
