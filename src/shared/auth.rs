@@ -52,7 +52,6 @@ impl axum::response::IntoResponse for AuthError {
 pub struct AuthContext {
     pub session: Session,
     pub user: User,
-    pub pool: PgPool,
 }
 
 impl Deref for AuthContext {
@@ -209,7 +208,6 @@ impl FromRequestParts<PgPool> for AuthContext {
         Ok(AuthContext {
             session,
             user: user_row.into(),
-            pool: pool.clone(),
         })
     }
 }

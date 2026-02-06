@@ -3,7 +3,7 @@
 //! Business capability: View all users (admin feature)
 //! Uses shared AuthContext to avoid repeated session/auth checks
 
-use axum::{http::StatusCode, response::IntoResponse, Json, Router, routing::get};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json, Router, routing::get};
 use serde::Serialize;
 use sqlx::PgPool;
 use thiserror::Error;
@@ -79,12 +79,13 @@ async fn list_all_users(pool: &PgPool) -> Result<Vec<UserRow>, sqlx::Error> {
 )]
 pub async fn handle(
     auth: AuthContext,
+    State(pool): State<PgPool>,
 ) -> Result<Json<Vec<UserResponse>>, Error> {
     // Check permissions
     auth.require(Permission::ReadUserDetails)?;
     
     // Get users
-    let users = list_all_users(&auth.pool).await?;
+    let users = list_all_users(&pool).await?;
     
     let response = users
         .into_iter()

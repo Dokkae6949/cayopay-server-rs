@@ -3,7 +3,7 @@
 //! Business capability: View all pending invitations (admin feature)
 //! Uses shared AuthContext to avoid repeated session/auth checks
 
-use axum::{http::StatusCode, response::IntoResponse, Json, Router, routing::get};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json, Router, routing::get};
 use serde::Serialize;
 use sqlx::PgPool;
 use thiserror::Error;
@@ -86,12 +86,13 @@ async fn list_invites(pool: &PgPool) -> Result<Vec<InviteRow>, sqlx::Error> {
 )]
 pub async fn handle(
     auth: AuthContext,
+    State(pool): State<PgPool>,
 ) -> Result<Json<Vec<InviteResponse>>, Error> {
     // Check permissions (AuthContext already has user loaded!)
     auth.require(Permission::ViewInvite)?;
     
     // Get invites with rich data
-    let invites = list_invites(&auth.pool).await?;
+    let invites = list_invites(&pool).await?;
     
     let response = invites
         .into_iter()
