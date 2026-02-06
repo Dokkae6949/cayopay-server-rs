@@ -1,6 +1,5 @@
-use application::{config::Config, state::AppState};
+use cayopay_server::{app, config::Config};
 use domain::{wallet::WalletLabel, Role};
-use infra::stores::{models::WalletCreation, WalletStore};
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -36,15 +35,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       .expect("Failed to run migrations");
   }
 
-  // Initialize application state
-  let state = AppState::new(&config, pool);
+  // Seed database
+  seed_owner(&config, &pool).await?;
+  seed_wallets(&pool).await?;
 
-  // Seed databasse
-  seed_owner(&state).await?;
-  seed_wallets(&state).await?;
-
-  // Create router
-  let app = api::router(state);
+  // Create app
+  let smtp_config = config.smtp_config();
+  let app = app(pool, smtp_config);
 
   // Start server
   let addr_str = config.server_addr();
@@ -85,41 +82,57 @@ async fn shutdown_signal() {
   tracing::info!("signal received, starting graceful shutdown");
 }
 
-async fn seed_owner(state: &AppState) -> Result<(), Box<dyn std::error::Error>> {
-  match state
-    .auth_service
-    .register(
-      state.config.owner_email.clone(),
-      state.config.owner_password.clone(),
-      state.config.owner_first_name.clone(),
-      state.config.owner_last_name.clone(),
-      Role::Owner,
-    )
-    .await
-  {
-    Ok(_) => tracing::info!("Seeded default owner user"),
-    Err(application::error::AppError::UserAlreadyExists) => {
-      tracing::debug!("Default owner user already exists");
-    }
-    Err(e) => {
-      tracing::warn!("Failed to seed owner user: {}", e);
-      return Err(Box::new(e));
-    }
+async fn seed_owner(config: &Config, pool: &sqlx::PgPool) -> Result<(), Box<dyn std::error::Error>> {
+  use domain::RawPassword;
+  use uuid::Uuid;
+  
+  // Check if owner exists
+  let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)")
+    .bind(config.owner_email.expose())
+    .fetch_one(pool)
+    .await?;
+  
+  if exists {
+    tracing::debug!("Default owner user already exists");
+    return Ok(());
   }
+  
+  // Create owner user (inline, no abstraction)
+  let mut tx = pool.begin().await?;
+  
+  let actor_id: Uuid = sqlx::query_scalar("INSERT INTO actors DEFAULT VALUES RETURNING id")
+    .fetch_one(&mut *tx)
+    .await?;
+  
+  let hashed = config.owner_password.hash()?;
+  
+  sqlx::query("INSERT INTO users (actor_id, email, password_hash, first_name, last_name, role) VALUES ($1, $2, $3, $4, $5, $6)")
+    .bind(actor_id)
+    .bind(config.owner_email.expose())
+    .bind(hashed.expose())
+    .bind(&config.owner_first_name)
+    .bind(&config.owner_last_name)
+    .bind(Role::Owner.to_string())
+    .execute(&mut *tx)
+    .await?;
+  
+  sqlx::query("INSERT INTO wallets (owner_actor_id, allow_overdraft) VALUES ($1, false)")
+    .bind(actor_id)
+    .execute(&mut *tx)
+    .await?;
+  
+  tx.commit().await?;
+  
+  tracing::info!("Seeded default owner user");
   Ok(())
 }
 
-async fn seed_wallets(state: &AppState) -> Result<(), Box<dyn std::error::Error>> {
+async fn seed_wallets(pool: &sqlx::PgPool) -> Result<(), Box<dyn std::error::Error>> {
   for label in WalletLabel::variants() {
-    match WalletStore::create(
-      &state.pool,
-      &WalletCreation {
-        owner: None,
-        label: Some(label.clone()),
-        allow_overdraft: true,
-      },
-    )
-    .await
+    match sqlx::query("INSERT INTO wallets (label, allow_overdraft) VALUES ($1, true)")
+      .bind(label.to_string())
+      .execute(pool)
+      .await
     {
       Ok(_) => tracing::info!("Seeded wallet with label {:?}", label),
       Err(sqlx::Error::Database(db_err))
