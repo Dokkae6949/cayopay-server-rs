@@ -10,6 +10,7 @@
 
 pub mod config;
 pub mod features;
+pub mod shared;
 
 use axum::Router;
 use sqlx::PgPool;
@@ -68,9 +69,6 @@ impl ApiDoc {
 pub fn app(pool: PgPool, smtp: SmtpConfig) -> Router {
     let openapi = ApiDoc::with_security();
     
-    // Create state tuple for send_invite
-    let invite_state = (pool.clone(), smtp.clone());
-    
     // Each feature router gets appropriate state
     let api_router = Router::new()
         .merge(features::health::router())
@@ -84,7 +82,7 @@ pub fn app(pool: PgPool, smtp: SmtpConfig) -> Router {
             Router::new()
                 .merge(features::list_invites::router().with_state(pool.clone()))
                 .merge(features::accept_invite::router().with_state(pool.clone()))
-                .merge(features::send_invite::router().with_state(invite_state))
+                .merge(features::send_invite::router().with_state((pool.clone(), smtp)))
         )
         .nest("/users", features::list_users::router().with_state(pool.clone()))
         .nest("/guests", features::list_guests::router().with_state(pool));

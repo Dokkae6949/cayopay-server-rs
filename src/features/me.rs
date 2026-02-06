@@ -1,16 +1,15 @@
 //! Current User Feature
 //!
 //! Business capability: Get currently authenticated user's information
-//! Everything in one place: handler, DB query, auth check, errors
+//! Uses shared AuthnContext to avoid repeated session fetching
 
-use axum::{extract::State, http::StatusCode, response::{IntoResponse, Response as AxumResponse}, Json, Router, routing::get};
-use axum_extra::extract::CookieJar;
+use axum::{http::StatusCode, response::IntoResponse, Json, Router, routing::get};
 use serde::Serialize;
 use sqlx::PgPool;
 use thiserror::Error;
 use utoipa::ToSchema;
-use uuid::Uuid;
 
+use crate::shared::AuthnContext;
 use domain::Role;
 
 // ===== DTOs =====
@@ -28,54 +27,16 @@ pub struct ResponseDto {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Unauthorized")]
-    Unauthorized,
-    #[error("Database error")]
-    Database(#[from] sqlx::Error),
+    #[error("Auth error")]
+    Auth(#[from] crate::shared::AuthError),
 }
 
 impl IntoResponse for Error {
-    fn into_response(self) -> AxumResponse {
-        let (status, msg) = match self {
-            Error::Unauthorized => (StatusCode::UNAUTHORIZED, self.to_string()),
-            Error::Database(ref e) => {
-                tracing::error!("DB error in me: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
-            }
-        };
-        (status, Json(serde_json::json!({"error": msg}))).into_response()
+    fn into_response(self) -> axum::response::Response {
+        match self {
+            Error::Auth(e) => e.into_response(),
+        }
     }
-}
-
-// ===== DB queries =====
-
-#[derive(Debug, sqlx::FromRow)]
-struct SessionRow {
-    user_id: Uuid,
-    expires_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(Debug, sqlx::FromRow)]
-struct UserRow {
-    id: Uuid,
-    email: String,
-    first_name: String,
-    last_name: String,
-    role: String,
-}
-
-async fn find_session(pool: &PgPool, token: &str) -> Result<Option<SessionRow>, sqlx::Error> {
-    sqlx::query_as("SELECT user_id, expires_at FROM sessions WHERE token = $1")
-        .bind(token)
-        .fetch_optional(pool)
-        .await
-}
-
-async fn find_user(pool: &PgPool, user_id: Uuid) -> Result<Option<UserRow>, sqlx::Error> {
-    sqlx::query_as("SELECT id, email, first_name, last_name, role FROM users WHERE id = $1")
-        .bind(user_id)
-        .fetch_optional(pool)
-        .await
 }
 
 // ===== Handler =====
@@ -90,31 +51,15 @@ async fn find_user(pool: &PgPool, user_id: Uuid) -> Result<Option<UserRow>, sqlx
     security(("session_cookie" = []))
 )]
 pub async fn handle(
-    State(pool): State<PgPool>,
-    jar: CookieJar,
+    authn: AuthnContext,
 ) -> Result<Json<ResponseDto>, Error> {
-    // Get session from cookie
-    let token = jar.get("cayopay_session")
-        .ok_or(Error::Unauthorized)?
-        .value();
-    
-    // Find session
-    let session = find_session(&pool, token).await?.ok_or(Error::Unauthorized)?;
-    
-    // Check expiry
-    if session.expires_at < chrono::Utc::now() {
-        return Err(Error::Unauthorized);
-    }
-    
-    // Get user
-    let user = find_user(&pool, session.user_id).await?.ok_or(Error::Unauthorized)?;
-    
+    // User info is already fetched by AuthnContext!
     Ok(Json(ResponseDto {
-        id: user.id.to_string(),
-        email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        role: Role::from(user.role),
+        id: authn.user.id.to_string(),
+        email: authn.user.email.expose().to_string(),
+        first_name: authn.user.first_name.clone(),
+        last_name: authn.user.last_name.clone(),
+        role: authn.user.role,
     }))
 }
 

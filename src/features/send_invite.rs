@@ -1,9 +1,9 @@
 //! Send Invite Feature
 //!
 //! Business capability: Owner/Admin sends invitation to new user
-//! Everything inline: handler, DB queries, email sending, auth check, errors
+//! Note: This feature doesn't use AuthzContext due to needing additional SMTP state
 
-use axum::{extract::State, http::StatusCode, response::{IntoResponse, Response}, Json, Router, routing::post};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json, Router, routing::post};
 use axum_extra::extract::CookieJar;
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -12,7 +12,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 use validator::Validate;
 
-use domain::{Email, Permission, Role};
+use domain::{Permission, Role};
 
 // ===== DTOs =====
 
@@ -179,7 +179,7 @@ pub async fn handle(
     // Validate
     req.validate().map_err(|e| Error::Validation(e.to_string()))?;
     
-    // Auth check
+    // Auth check (inline for this feature due to unique state requirements)
     let token = jar.get("cayopay_session").ok_or(Error::Unauthorized)?.value();
     let session = find_session(&pool, token).await?.ok_or(Error::Unauthorized)?;
     if session.expires_at < chrono::Utc::now() {

@@ -1,17 +1,17 @@
 //! List Guests Feature
 //!
 //! Business capability: View all guests (admin feature)
-//! Everything inline: handler, DB query, auth check, rich DTOs, errors
+//! Uses shared AuthzContext to avoid repeated session/auth checks
 
-use axum::{extract::State, http::StatusCode, response::{IntoResponse, Response as AxumResponse}, Json, Router, routing::get};
-use axum_extra::extract::CookieJar;
+use axum::{http::StatusCode, response::IntoResponse, Json, Router, routing::get};
 use serde::Serialize;
 use sqlx::PgPool;
 use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use domain::{Permission, Role};
+use crate::shared::AuthzContext;
+use domain::Permission;
 
 // ===== DTOs =====
 
@@ -27,40 +27,25 @@ pub struct GuestResponse {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Unauthorized")]
-    Unauthorized,
-    #[error("Forbidden")]
-    Forbidden,
+    #[error("Auth error")]
+    Auth(#[from] crate::shared::AuthError),
     #[error("Database error")]
     Database(#[from] sqlx::Error),
 }
 
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
-        let (status, msg) = match self {
-            Error::Unauthorized => (StatusCode::UNAUTHORIZED, self.to_string()),
-            Error::Forbidden => (StatusCode::FORBIDDEN, self.to_string()),
+        match self {
+            Error::Auth(e) => e.into_response(),
             Error::Database(ref e) => {
                 tracing::error!("DB error in list_guests: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Internal error"}))).into_response()
             }
-        };
-        (status, Json(serde_json::json!({"error": msg}))).into_response()
+        }
     }
 }
 
 // ===== DB queries =====
-
-#[derive(Debug, sqlx::FromRow)]
-struct SessionRow {
-    user_id: Uuid,
-    expires_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(Debug, sqlx::FromRow)]
-struct UserRow {
-    role: String,
-}
 
 #[derive(Debug, sqlx::FromRow)]
 struct GuestRow {
@@ -68,20 +53,6 @@ struct GuestRow {
     email: Option<String>,
     verified: bool,
     created_at: chrono::DateTime<chrono::Utc>,
-}
-
-async fn find_session(pool: &PgPool, token: &str) -> Result<Option<SessionRow>, sqlx::Error> {
-    sqlx::query_as("SELECT user_id, expires_at FROM sessions WHERE token = $1")
-        .bind(token)
-        .fetch_optional(pool)
-        .await
-}
-
-async fn find_user_role(pool: &PgPool, user_id: Uuid) -> Result<Option<UserRow>, sqlx::Error> {
-    sqlx::query_as("SELECT role FROM users WHERE id = $1")
-        .bind(user_id)
-        .fetch_optional(pool)
-        .await
 }
 
 async fn list_all_guests(pool: &PgPool) -> Result<Vec<GuestRow>, sqlx::Error> {
@@ -103,26 +74,13 @@ async fn list_all_guests(pool: &PgPool) -> Result<Vec<GuestRow>, sqlx::Error> {
     security(("session_cookie" = []))
 )]
 pub async fn handle(
-    State(pool): State<PgPool>,
-    jar: CookieJar,
+    authz: AuthzContext,
 ) -> Result<Json<Vec<GuestResponse>>, Error> {
-    // Auth check
-    let token = jar.get("cayopay_session").ok_or(Error::Unauthorized)?.value();
-    let session = find_session(&pool, token).await?.ok_or(Error::Unauthorized)?;
-    if session.expires_at < chrono::Utc::now() {
-        return Err(Error::Unauthorized);
-    }
-    
-    // Get user & check permissions
-    let user = find_user_role(&pool, session.user_id).await?.ok_or(Error::Unauthorized)?;
-    let user_role = Role::from(user.role);
-    
-    if !user_role.has_permission(Permission::ReadGuestDetails) {
-        return Err(Error::Forbidden);
-    }
+    // Check permissions
+    authz.require(Permission::ReadGuestDetails)?;
     
     // Get guests
-    let guests = list_all_guests(&pool).await?;
+    let guests = list_all_guests(&authz.pool).await?;
     
     let response = guests
         .into_iter()
