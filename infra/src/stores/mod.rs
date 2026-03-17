@@ -13,7 +13,6 @@ pub mod wallet;
 pub use actor::ActorStore;
 pub use guest::GuestStore;
 pub use invite::InviteStore;
-pub use permission::PermissionStore;
 pub use role::{RolePermissionStore, RoleStore, UserRoleStore};
 pub use session::SessionStore;
 pub use shop::{ShopMemberStore, ShopOfferingStore, ShopStore};

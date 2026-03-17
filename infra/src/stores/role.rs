@@ -1,6 +1,5 @@
 use domain::{Role, RoleId, RolePermission, RolePermissionId, UserRole, UserRoleId, UserId};
 use sqlx::{Executor, Postgres};
-use uuid::Uuid;
 
 use crate::stores::models::role::{
   RoleCreation, RolePermissionCreation, RolePermissionRow, RoleRow, UserRoleCreation, UserRoleRow,
@@ -110,19 +109,19 @@ impl RolePermissionStore {
   {
     let row = sqlx::query_as::<_, RolePermissionRow>(
       r#"
-      INSERT INTO role_permissions (role_id, permission_id, scope_kind, scope_id)
+      INSERT INTO role_permissions (role_id, permission, scope_kind, scope_id)
       VALUES ($1, $2, $3, $4)
-      RETURNING id, role_id, permission_id, scope_kind, scope_id, created_at
+      RETURNING id, role_id, permission, scope_kind, scope_id, created_at
       "#,
     )
     .bind(creation.role_id.into_inner())
-    .bind(creation.permission_id.into_inner())
-    .bind(&creation.scope_kind)
+    .bind(creation.permission.as_str())
+    .bind(creation.scope_kind.as_deref())
     .bind(creation.scope_id)
     .fetch_one(executor)
     .await?;
 
-    Ok(row.into())
+    row.try_into().map_err(|e: String| sqlx::Error::Decode(e.into()))
   }
 
   pub async fn remove<'c, E>(
@@ -150,7 +149,7 @@ impl RolePermissionStore {
   {
     let rows = sqlx::query_as::<_, RolePermissionRow>(
       r#"
-      SELECT id, role_id, permission_id, scope_kind, scope_id, created_at
+      SELECT id, role_id, permission, scope_kind, scope_id, created_at
       FROM role_permissions
       WHERE role_id = $1
       "#,
@@ -159,7 +158,10 @@ impl RolePermissionStore {
     .fetch_all(executor)
     .await?;
 
-    Ok(rows.into_iter().map(Into::into).collect())
+    rows
+      .into_iter()
+      .map(|r| r.try_into().map_err(|e: String| sqlx::Error::Decode(e.into())))
+      .collect()
   }
 
   /// Lists all permissions for a role, including permissions inherited from parent roles.
@@ -182,7 +184,7 @@ impl RolePermissionStore {
         FROM roles r
         JOIN role_hierarchy rh ON r.id = rh.inherited_from_role_id
       )
-      SELECT rp.id, rp.role_id, rp.permission_id, rp.scope_kind, rp.scope_id, rp.created_at
+      SELECT rp.id, rp.role_id, rp.permission, rp.scope_kind, rp.scope_id, rp.created_at
       FROM role_permissions rp
       JOIN role_hierarchy rh ON rp.role_id = rh.id
       "#,
@@ -191,7 +193,10 @@ impl RolePermissionStore {
     .fetch_all(executor)
     .await?;
 
-    Ok(rows.into_iter().map(Into::into).collect())
+    rows
+      .into_iter()
+      .map(|r| r.try_into().map_err(|e: String| sqlx::Error::Decode(e.into())))
+      .collect()
   }
 }
 
@@ -287,21 +292,5 @@ impl UserRoleStore {
     .await?;
 
     Ok(rows.into_iter().map(Into::into).collect())
-  }
-
-  /// Returns all role IDs for a user (for quick in-memory checks).
-  pub async fn list_role_ids_for_user<'c, E>(
-    executor: E,
-    user_id: &UserId,
-  ) -> Result<Vec<Uuid>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
-    let rows = sqlx::query_as::<_, (Uuid,)>("SELECT role_id FROM user_roles WHERE user_id = $1")
-      .bind(user_id.into_inner())
-      .fetch_all(executor)
-      .await?;
-
-    Ok(rows.into_iter().map(|(id,)| id).collect())
   }
 }

@@ -1,7 +1,5 @@
 use chrono::{DateTime, Utc};
-use domain::{
-  models::permission::PermissionId, Role, RoleId, RolePermission, UserRole, UserId,
-};
+use domain::{models::permission::Permission, Role, RoleId, RolePermission, UserRole, UserId};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
@@ -21,12 +19,14 @@ pub struct RoleCreation {
   pub inherited_from_role_id: Option<RoleId>,
 }
 
+/// DB row for `role_permissions`.
+/// The `permission` column stores the canonical string code of a [`Permission`] variant.
 #[derive(Clone, FromRow)]
 pub struct RolePermissionRow {
   pub id: Uuid,
   pub role_id: Uuid,
-  pub permission_id: Uuid,
-  pub scope_kind: String,
+  pub permission: String,
+  pub scope_kind: Option<String>,
   pub scope_id: Option<Uuid>,
   pub created_at: DateTime<Utc>,
 }
@@ -34,8 +34,8 @@ pub struct RolePermissionRow {
 #[derive(Clone)]
 pub struct RolePermissionCreation {
   pub role_id: RoleId,
-  pub permission_id: PermissionId,
-  pub scope_kind: String,
+  pub permission: Permission,
+  pub scope_kind: Option<String>,
   pub scope_id: Option<Uuid>,
 }
 
@@ -65,16 +65,20 @@ impl From<RoleRow> for Role {
   }
 }
 
-impl From<RolePermissionRow> for RolePermission {
-  fn from(value: RolePermissionRow) -> Self {
-    Self {
+impl TryFrom<RolePermissionRow> for RolePermission {
+  type Error = String;
+
+  fn try_from(value: RolePermissionRow) -> Result<Self, Self::Error> {
+    let permission = Permission::from_code(&value.permission)
+      .ok_or_else(|| format!("unknown permission code '{}' in database", value.permission))?;
+    Ok(Self {
       id: value.id.into(),
       role_id: value.role_id.into(),
-      permission_id: value.permission_id.into(),
+      permission,
       scope_kind: value.scope_kind,
       scope_id: value.scope_id,
       created_at: value.created_at,
-    }
+    })
   }
 }
 

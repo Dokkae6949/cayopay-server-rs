@@ -17,10 +17,9 @@ pub enum AppError {
   #[error("Authorization failed")]
   Authorization,
 
-  #[error("Permission denied: requires '{action}:{subject}' in scope '{scope}'")]
+  #[error("Permission denied: requires '{permission}' in scope '{scope}'")]
   PermissionDenied {
-    action: String,
-    subject: String,
+    permission: String,
     scope: String,
   },
 

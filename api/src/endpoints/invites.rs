@@ -9,7 +9,7 @@ use axum::{
   routing::{get, post},
   Json, Router,
 };
-use domain::{Email, RawPassword};
+use domain::{models::permission::Permission, Email, RawPassword};
 
 #[utoipa::path(
   post,
@@ -31,7 +31,7 @@ pub async fn create_invite(
   ValidatedJson(payload): ValidatedJson<InviteRequest>,
 ) -> AppResult<()> {
   // Check that the authenticated user has permission to send invites
-  authz.require("send", "invite").await?;
+  authz.require(Permission::SendInvite).await?;
 
   let email = Email::new(payload.email);
   let user_id = authz.user_id();
@@ -62,7 +62,7 @@ pub async fn get_invites(
   authz: Authz,
 ) -> AppResult<Json<Vec<InviteResponse>>> {
   // Check that the authenticated user has permission to view invites
-  authz.require("view", "invite").await?;
+  authz.require(Permission::ViewInvite).await?;
 
   let invites = state.invite_service.get_all().await?;
   let response = invites

@@ -12,7 +12,7 @@ pub mod wallet;
 pub use actor::{Actor, ActorId};
 pub use guest::{Guest, GuestId};
 pub use invite::{Invite, InviteId, InviteStatus};
-pub use permission::{Permission, PermissionId};
+pub use permission::Permission;
 pub use role::{Role, RoleId, RolePermission, RolePermissionId, UserRole, UserRoleId};
 pub use session::{Session, SessionId};
 pub use shop::{Shop, ShopId, ShopMember, ShopMemberId, ShopOffering, ShopOfferingId};

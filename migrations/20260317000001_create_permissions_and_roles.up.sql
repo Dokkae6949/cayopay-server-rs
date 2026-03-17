@@ -1,17 +1,5 @@
--- Create permissions table
--- Each permission defines an action on a subject, e.g. action="send" subject="invite"
-create table permissions (
-    id uuid primary key default uuidv7(),
-    action text not null,
-    subject text not null,
-    description text,
-    created_at timestamptz not null default now(),
-
-    unique(action, subject)
-);
-
 -- Create roles table
--- Roles are dynamic, runtime-configurable, and can inherit from other roles
+-- Roles are dynamic, runtime-configurable, and can inherit from other roles.
 create table roles (
     id uuid primary key default uuidv7(),
     name text not null unique,
@@ -21,22 +9,24 @@ create table roles (
 );
 
 -- Create role_permissions table
--- Links roles to permissions with an optional scope
--- scope_kind: "global", "shop", "register", "event", etc.
--- scope_id: specific resource UUID (null means all resources of that kind)
+-- Links roles to code-defined permissions (stored by their string code) with an
+-- optional resource scope.
+--
+-- scope_kind: "shop", "register", "event", etc.  NULL means global (no restriction).
+-- scope_id:   specific resource UUID.  NULL means all resources of that kind.
 create table role_permissions (
     id uuid primary key default uuidv7(),
     role_id uuid not null references roles(id) on delete cascade,
-    permission_id uuid not null references permissions(id) on delete cascade,
-    scope_kind text not null default 'global',
+    permission text not null,
+    scope_kind text,
     scope_id uuid,
     created_at timestamptz not null default now(),
 
-    unique nulls not distinct (role_id, permission_id, scope_kind, scope_id)
+    unique nulls not distinct (role_id, permission, scope_kind, scope_id)
 );
 
 -- Create user_roles table
--- Users can have multiple roles
+-- Users can hold multiple roles.
 create table user_roles (
     id uuid primary key default uuidv7(),
     user_id uuid not null references users(id) on delete cascade,
@@ -46,33 +36,39 @@ create table user_roles (
     unique(user_id, role_id)
 );
 
--- Insert default permissions
-insert into permissions (action, subject, description) values
-    ('configure', 'settings',   'Configure system settings'),
-    ('send',      'invite',     'Send invites to new users'),
-    ('view',      'invite',     'View all invites'),
-    ('remove',    'user',       'Remove users from the system'),
-    ('read',      'user',       'Read user details'),
-    ('remove',    'guest',      'Remove guests from the system'),
-    ('read',      'guest',      'Read guest details');
-
 -- Insert default roles
 insert into roles (name, description) values
     ('owner', 'Full system access'),
     ('admin', 'Administrative access');
 
--- Assign all permissions to owner role (global scope)
-insert into role_permissions (role_id, permission_id)
-select r.id, p.id
-from roles r, permissions p
+-- Assign all permissions to the owner role (global scope — scope_kind IS NULL)
+insert into role_permissions (role_id, permission)
+select r.id, p.code
+from roles r
+cross join (values
+    ('settings.configure'),
+    ('invite.send'),
+    ('invite.view'),
+    ('user.remove'),
+    ('user.read'),
+    ('guest.remove'),
+    ('guest.read')
+) as p(code)
 where r.name = 'owner';
 
--- Assign permissions to admin role (all except configure:settings)
-insert into role_permissions (role_id, permission_id)
-select r.id, p.id
-from roles r, permissions p
-where r.name = 'admin'
-  and not (p.action = 'configure' and p.subject = 'settings');
+-- Assign permissions to admin role (all except settings.configure)
+insert into role_permissions (role_id, permission)
+select r.id, p.code
+from roles r
+cross join (values
+    ('invite.send'),
+    ('invite.view'),
+    ('user.remove'),
+    ('user.read'),
+    ('guest.remove'),
+    ('guest.read')
+) as p(code)
+where r.name = 'admin';
 
 -- Migrate existing user roles from the old role column to user_roles table
 insert into user_roles (user_id, role_id)
