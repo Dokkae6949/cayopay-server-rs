@@ -31,7 +31,6 @@ use endpoints::{auth, guest, health, invites, user};
             domain::Email,
             domain::RawPassword,
             domain::HashedPassword,
-            domain::Role,
             domain::InviteStatus,
             models::UserResponse,
             models::GuestResponse,

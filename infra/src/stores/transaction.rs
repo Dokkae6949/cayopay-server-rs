@@ -1,5 +1,5 @@
 use domain::{transaction::TransactionId, types::Money, wallet::WalletId, Transaction};
-use sqlx::{Executor, Postgres};
+use sqlx::{Executor, Postgres, Row};
 
 use crate::stores::models::transaction::{TransactionCreation, TransactionRow};
 
@@ -13,19 +13,18 @@ impl TransactionStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      TransactionRow,
+    let row = sqlx::query_as::<_, TransactionRow>(
       r#"
       INSERT INTO transactions (source_wallet_id, destination_wallet_id, executor_actor_id, amount_cents, description)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING id, source_wallet_id, destination_wallet_id, executor_actor_id, amount_cents, description, created_at, updated_at
       "#,
-      creation.source.into_inner(),
-      creation.destination.into_inner(),
-      creation.executor.as_ref().map(|e| e.into_inner()),
-      creation.amount.as_minor(),
-      creation.description,
     )
+    .bind(creation.source.into_inner())
+    .bind(creation.destination.into_inner())
+    .bind(creation.executor.as_ref().map(|e| e.into_inner()))
+    .bind(creation.amount.as_minor())
+    .bind(&creation.description)
     .fetch_one(executor)
     .await?;
 
@@ -39,15 +38,14 @@ impl TransactionStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      TransactionRow,
+    let row = sqlx::query_as::<_, TransactionRow>(
       r#"
       SELECT id, source_wallet_id, destination_wallet_id, executor_actor_id, amount_cents, description, created_at, updated_at
       FROM transactions
       WHERE id = $1
       "#,
-      id.into_inner(),
     )
+    .bind(id.into_inner())
     .fetch_optional(executor)
     .await?;
 
@@ -61,16 +59,15 @@ impl TransactionStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let rows = sqlx::query_as!(
-      TransactionRow,
+    let rows = sqlx::query_as::<_, TransactionRow>(
       r#"
       SELECT id, source_wallet_id, destination_wallet_id, executor_actor_id, amount_cents, description, created_at, updated_at
       FROM transactions
       WHERE source_wallet_id = $1 OR destination_wallet_id = $1
       ORDER BY created_at DESC
       "#,
-      wallet_id.into_inner(),
     )
+    .bind(wallet_id.into_inner())
     .fetch_all(executor)
     .await?;
 
@@ -84,25 +81,24 @@ impl TransactionStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let balance: Option<i64> = sqlx::query_scalar!(
+    let row = sqlx::query(
       r#"
-        SELECT
-          COALESCE(SUM(
-            CASE
-              WHEN destination_wallet_id = $1 THEN amount_cents
-              WHEN source_wallet_id = $1 THEN -amount_cents
-              ELSE 0
-            END
-          ), 0) AS balance
-        FROM transactions
-        WHERE source_wallet_id = $1 OR destination_wallet_id = $1
-        "#,
-      wallet_id.into_inner(),
+      SELECT COALESCE(SUM(
+        CASE
+          WHEN destination_wallet_id = $1 THEN amount_cents
+          WHEN source_wallet_id = $1 THEN -amount_cents
+          ELSE 0
+        END
+      ), 0)::bigint AS balance
+      FROM transactions
+      WHERE source_wallet_id = $1 OR destination_wallet_id = $1
+      "#,
     )
+    .bind(wallet_id.into_inner())
     .fetch_one(executor)
     .await?;
 
-    let balance = balance.unwrap_or_default();
+    let balance: i64 = row.try_get("balance")?;
     let balance_i32 = i32::try_from(balance).map_err(|_| sqlx::Error::ColumnDecode {
       index: "balance".to_string(),
       source: Box::new(std::io::Error::new(

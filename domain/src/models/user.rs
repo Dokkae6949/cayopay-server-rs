@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 
-use crate::{actor::ActorId, Email, HashedPassword, Id, Role};
+use crate::{actor::ActorId, Email, HashedPassword, Id};
 
 pub type UserId = Id<User>;
 
@@ -12,7 +12,6 @@ pub struct User {
   pub password: HashedPassword,
   pub first_name: String,
   pub last_name: String,
-  pub role: Role,
   pub created_at: DateTime<Utc>,
   pub updated_at: Option<DateTime<Utc>>,
 }

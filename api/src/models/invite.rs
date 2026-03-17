@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
 
-use domain::{Id, Invite, InviteStatus, Role, User};
+use domain::{Id, Invite, InviteStatus, User};
 
 #[derive(Deserialize, Validate, ToSchema)]
 pub struct InviteRequest {
@@ -11,7 +11,9 @@ pub struct InviteRequest {
   #[schema(example = "friend@example.com")]
   pub email: String,
 
-  pub role: Role,
+  /// Name of the role to assign to the invited user (must exist in the roles table).
+  #[schema(example = "admin")]
+  pub role: String,
 }
 
 #[derive(Deserialize, Validate, ToSchema)]
@@ -32,7 +34,7 @@ pub struct InviteResponse {
   pub id: Id<Invite>,
   pub invitor: Id<User>,
   pub email: String,
-  pub role: Role,
+  pub role: String,
   pub status: InviteStatus,
   pub expires_at: DateTime<Utc>,
   pub created_at: DateTime<Utc>,

@@ -10,20 +10,18 @@ impl UserStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      UserRow,
+    let row = sqlx::query_as::<_, UserRow>(
       r#"
-      INSERT INTO users (actor_id, email, password_hash, first_name, last_name, role)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, actor_id, email, password_hash, first_name, last_name, role, created_at, updated_at
+      INSERT INTO users (actor_id, email, password_hash, first_name, last_name)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, actor_id, email, password_hash, first_name, last_name, created_at, updated_at
       "#,
-      creation.actor_id.into_inner(),
-      creation.email.expose(),
-      creation.password.expose(),
-      creation.first_name,
-      creation.last_name,
-      creation.role.to_string(),
     )
+    .bind(creation.actor_id.into_inner())
+    .bind(creation.email.expose())
+    .bind(creation.password.expose())
+    .bind(&creation.first_name)
+    .bind(&creation.last_name)
     .fetch_one(executor)
     .await?;
 
@@ -38,25 +36,22 @@ impl UserStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      UserRow,
+    let row = sqlx::query_as::<_, UserRow>(
       r#"
       UPDATE users
       SET email = COALESCE($2, email),
           password_hash = COALESCE($3, password_hash),
           first_name = COALESCE($4, first_name),
-          last_name = COALESCE($5, last_name),
-          role = COALESCE($6, role)
+          last_name = COALESCE($5, last_name)
       WHERE id = $1
-      RETURNING id, actor_id, email, password_hash, first_name, last_name, role, created_at, updated_at
+      RETURNING id, actor_id, email, password_hash, first_name, last_name, created_at, updated_at
       "#,
-      id.into_inner(),
-      update.email.as_ref().map(|e| e.expose()),
-      update.password.as_ref().map(|p| p.expose()),
-      update.first_name.as_ref(),
-      update.last_name.as_ref(),
-      update.role.as_ref().map(ToString::to_string),
     )
+    .bind(id.into_inner())
+    .bind(update.email.as_ref().map(|e| e.expose()))
+    .bind(update.password.as_ref().map(|p| p.expose()))
+    .bind(update.first_name.as_ref())
+    .bind(update.last_name.as_ref())
     .fetch_optional(executor)
     .await?;
 
@@ -67,15 +62,14 @@ impl UserStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      UserRow,
+    let row = sqlx::query_as::<_, UserRow>(
       r#"
-      SELECT id, actor_id, email, password_hash, first_name, last_name, role, created_at, updated_at
+      SELECT id, actor_id, email, password_hash, first_name, last_name, created_at, updated_at
       FROM users
       WHERE id = $1
       "#,
-      id.into_inner()
     )
+    .bind(id.into_inner())
     .fetch_optional(executor)
     .await?;
 
@@ -86,15 +80,14 @@ impl UserStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      UserRow,
+    let row = sqlx::query_as::<_, UserRow>(
       r#"
-      SELECT id, actor_id, email, password_hash, first_name, last_name, role, created_at, updated_at
+      SELECT id, actor_id, email, password_hash, first_name, last_name, created_at, updated_at
       FROM users
       WHERE email = $1
       "#,
-      email.expose()
     )
+    .bind(email.expose())
     .fetch_optional(executor)
     .await?;
 
@@ -108,15 +101,14 @@ impl UserStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      UserRow,
+    let row = sqlx::query_as::<_, UserRow>(
       r#"
-      SELECT id, actor_id, email, password_hash, first_name, last_name, role, created_at, updated_at
+      SELECT id, actor_id, email, password_hash, first_name, last_name, created_at, updated_at
       FROM users
       WHERE actor_id = $1
       "#,
-      actor_id.into_inner()
     )
+    .bind(actor_id.into_inner())
     .fetch_optional(executor)
     .await?;
 
@@ -127,12 +119,11 @@ impl UserStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let rows = sqlx::query_as!(
-      UserRow,
+    let rows = sqlx::query_as::<_, UserRow>(
       r#"
-      SELECT id, actor_id, email, password_hash, first_name, last_name, role, created_at, updated_at
+      SELECT id, actor_id, email, password_hash, first_name, last_name, created_at, updated_at
       FROM users
-      "#
+      "#,
     )
     .fetch_all(executor)
     .await?;

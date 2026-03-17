@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use domain::{ActorId, Email, HashedPassword, Role, User};
+use domain::{ActorId, Email, HashedPassword, User};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
@@ -11,7 +11,6 @@ pub(crate) struct UserRow {
   pub password_hash: String,
   pub first_name: String,
   pub last_name: String,
-  pub role: String,
   pub created_at: DateTime<Utc>,
   pub updated_at: Option<DateTime<Utc>>,
 }
@@ -23,16 +22,14 @@ pub struct UserCreation {
   pub password: HashedPassword,
   pub first_name: String,
   pub last_name: String,
-  pub role: Role,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct UserUpdate {
   pub email: Option<Email>,
   pub password: Option<HashedPassword>,
   pub first_name: Option<String>,
   pub last_name: Option<String>,
-  pub role: Option<Role>,
 }
 
 impl From<UserRow> for User {
@@ -44,7 +41,6 @@ impl From<UserRow> for User {
       password: value.password_hash.into(),
       first_name: value.first_name,
       last_name: value.last_name,
-      role: value.role.into(),
       created_at: value.created_at,
       updated_at: value.updated_at,
     }

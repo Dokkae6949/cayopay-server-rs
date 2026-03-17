@@ -13,19 +13,18 @@ impl SessionStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      SessionRow,
+    let row = sqlx::query_as::<_, SessionRow>(
       r#"
       INSERT INTO sessions (user_id, token, user_agent, ip_address, expires_at)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING id, user_id, token, user_agent, ip_address, expires_at, created_at, updated_at
       "#,
-      creation.user_id.into_inner(),
-      creation.token,
-      creation.user_agent,
-      creation.ip_address,
-      chrono::Utc::now() + creation.expires_in,
     )
+    .bind(creation.user_id.into_inner())
+    .bind(&creation.token)
+    .bind(&creation.user_agent)
+    .bind(&creation.ip_address)
+    .bind(chrono::Utc::now() + creation.expires_in)
     .fetch_one(executor)
     .await?;
 
@@ -36,15 +35,10 @@ impl SessionStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    sqlx::query!(
-      r#"
-      DELETE FROM sessions
-      WHERE token = $1
-      "#,
-      token,
-    )
-    .execute(executor)
-    .await?;
+    sqlx::query("DELETE FROM sessions WHERE token = $1")
+      .bind(token)
+      .execute(executor)
+      .await?;
 
     Ok(())
   }
@@ -56,15 +50,14 @@ impl SessionStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      SessionRow,
+    let row = sqlx::query_as::<_, SessionRow>(
       r#"
       SELECT id, user_id, token, user_agent, ip_address, expires_at, created_at, updated_at
       FROM sessions
       WHERE token = $1
       "#,
-      token,
     )
+    .bind(token)
     .fetch_optional(executor)
     .await?;
 
@@ -78,15 +71,14 @@ impl SessionStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let rows = sqlx::query_as!(
-      SessionRow,
+    let rows = sqlx::query_as::<_, SessionRow>(
       r#"
       SELECT id, user_id, token, user_agent, ip_address, expires_at, created_at, updated_at
       FROM sessions
       WHERE user_id = $1
       "#,
-      user_id.into_inner(),
     )
+    .bind(user_id.into_inner())
     .fetch_all(executor)
     .await?;
 

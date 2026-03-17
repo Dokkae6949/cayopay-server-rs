@@ -1,5 +1,5 @@
 use application::{config::Config, state::AppState};
-use domain::{wallet::WalletLabel, Role};
+use domain::wallet::WalletLabel;
 use infra::stores::{models::WalletCreation, WalletStore};
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
@@ -93,7 +93,6 @@ async fn seed_owner(state: &AppState) -> Result<(), Box<dyn std::error::Error>> 
       state.config.owner_password.clone(),
       state.config.owner_first_name.clone(),
       state.config.owner_last_name.clone(),
-      Role::Owner,
     )
     .await
   {

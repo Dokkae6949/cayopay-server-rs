@@ -13,17 +13,16 @@ impl WalletStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      WalletRow,
+    let row = sqlx::query_as::<_, WalletRow>(
       r#"
       INSERT INTO wallets (owner_actor_id, label, allow_overdraft)
       VALUES ($1, $2, $3)
       RETURNING id, owner_actor_id, label, allow_overdraft, created_at, updated_at
       "#,
-      creation.owner.map(|o| o.into_inner()),
-      creation.label.as_ref().map(ToString::to_string),
-      creation.allow_overdraft,
     )
+    .bind(creation.owner.map(|o| o.into_inner()))
+    .bind(creation.label.as_ref().map(ToString::to_string))
+    .bind(creation.allow_overdraft)
     .fetch_one(executor)
     .await?;
 
@@ -38,8 +37,7 @@ impl WalletStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      WalletRow,
+    let row = sqlx::query_as::<_, WalletRow>(
       r#"
       UPDATE wallets
       SET label = CASE WHEN $2 THEN $3 ELSE label END,
@@ -47,16 +45,18 @@ impl WalletStore {
       WHERE id = $1
       RETURNING id, owner_actor_id, label, allow_overdraft, created_at, updated_at
       "#,
-      id.into_inner(),
-      update.label.is_some(),
+    )
+    .bind(id.into_inner())
+    .bind(update.label.is_some())
+    .bind(
       update
         .label
         .clone()
         .flatten()
         .as_ref()
         .map(ToString::to_string),
-      update.allow_overdraft,
     )
+    .bind(update.allow_overdraft)
     .fetch_optional(executor)
     .await?;
 
@@ -67,15 +67,14 @@ impl WalletStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      WalletRow,
+    let row = sqlx::query_as::<_, WalletRow>(
       r#"
       SELECT id, owner_actor_id, label, allow_overdraft, created_at, updated_at
       FROM wallets
       WHERE id = $1
       "#,
-      id.into_inner(),
     )
+    .bind(id.into_inner())
     .fetch_optional(executor)
     .await?;
 
@@ -89,15 +88,14 @@ impl WalletStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      WalletRow,
+    let row = sqlx::query_as::<_, WalletRow>(
       r#"
       SELECT id, owner_actor_id, label, allow_overdraft, created_at, updated_at
       FROM wallets
       WHERE label = $1
       "#,
-      label.to_string(),
     )
+    .bind(label.to_string())
     .fetch_optional(executor)
     .await?;
 

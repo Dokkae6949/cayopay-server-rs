@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 
 use crate::error::{AppError, AppResult};
-use domain::{Email, RawPassword, Role, User};
+use domain::{Email, RawPassword, User};
 use infra::stores::{
   models::{UserCreation, WalletCreation},
   ActorStore, UserStore, WalletStore,
@@ -35,7 +35,6 @@ impl AuthService {
     password: RawPassword,
     first_name: String,
     last_name: String,
-    role: Role,
   ) -> AppResult<User> {
     if UserStore::find_by_email(&self.pool, &email)
       .await?
@@ -56,7 +55,6 @@ impl AuthService {
         password: password.hash()?,
         first_name,
         last_name,
-        role,
       },
     )
     .await?;

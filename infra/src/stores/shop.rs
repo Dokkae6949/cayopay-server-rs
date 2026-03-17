@@ -13,16 +13,15 @@ impl ShopStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      ShopRow,
+    let row = sqlx::query_as::<_, ShopRow>(
       r#"
       INSERT INTO shops (owner_user_id, name)
       VALUES ($1, $2)
       RETURNING id, owner_user_id, name, created_at, updated_at
       "#,
-      creation.owner.map(|id| id.into_inner()),
-      creation.name,
     )
+    .bind(creation.owner.map(|id| id.into_inner()))
+    .bind(&creation.name)
     .fetch_one(executor)
     .await?;
 
@@ -37,8 +36,7 @@ impl ShopStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      ShopRow,
+    let row = sqlx::query_as::<_, ShopRow>(
       r#"
       UPDATE shops
       SET owner_user_id = CASE WHEN $2::boolean THEN $3 ELSE owner_user_id END,
@@ -46,11 +44,11 @@ impl ShopStore {
       WHERE id = $1
       RETURNING id, owner_user_id, name, created_at, updated_at
       "#,
-      id.into_inner(),
-      update.owner.is_some(),
-      update.owner.flatten().map(|i| i.into_inner()),
-      update.name.as_ref(),
     )
+    .bind(id.into_inner())
+    .bind(update.owner.is_some())
+    .bind(update.owner.flatten().map(|i| i.into_inner()))
+    .bind(update.name.as_ref())
     .fetch_optional(executor)
     .await?;
 
@@ -61,15 +59,14 @@ impl ShopStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      ShopRow,
+    let row = sqlx::query_as::<_, ShopRow>(
       r#"
       SELECT id, owner_user_id, name, created_at, updated_at
       FROM shops
       WHERE id = $1
       "#,
-      id.into_inner()
     )
+    .bind(id.into_inner())
     .fetch_optional(executor)
     .await?;
 
@@ -80,12 +77,11 @@ impl ShopStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let rows = sqlx::query_as!(
-      ShopRow,
+    let rows = sqlx::query_as::<_, ShopRow>(
       r#"
       SELECT id, owner_user_id, name, created_at, updated_at
       FROM shops
-      "#
+      "#,
     )
     .fetch_all(executor)
     .await?;
@@ -105,18 +101,17 @@ impl ShopOfferingStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      ShopOfferingRow,
+    let row = sqlx::query_as::<_, ShopOfferingRow>(
       r#"
       INSERT INTO shop_offerings (shop_id, name, description, price_cents)
       VALUES ($1, $2, $3, $4)
       RETURNING id, shop_id, name, description, price_cents, created_at, updated_at
       "#,
-      shop_id.into_inner(),
-      creation.name,
-      creation.description.as_ref(),
-      creation.price.as_minor() as i32,
     )
+    .bind(shop_id.into_inner())
+    .bind(&creation.name)
+    .bind(creation.description.as_ref())
+    .bind(creation.price.as_minor() as i32)
     .fetch_one(executor)
     .await?;
 
@@ -131,8 +126,7 @@ impl ShopOfferingStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      ShopOfferingRow,
+    let row = sqlx::query_as::<_, ShopOfferingRow>(
       r#"
       UPDATE shop_offerings
       SET name = COALESCE($2, name),
@@ -141,12 +135,12 @@ impl ShopOfferingStore {
       WHERE id = $1
       RETURNING id, shop_id, name, description, price_cents, created_at, updated_at
       "#,
-      id.into_inner(),
-      update.name.as_ref(),
-      update.description.is_some(),
-      update.description.as_ref().and_then(|d| d.as_deref()),
-      update.price.map(|p| p.as_minor() as i32),
     )
+    .bind(id.into_inner())
+    .bind(update.name.as_ref())
+    .bind(update.description.is_some())
+    .bind(update.description.as_ref().and_then(|d| d.as_deref()))
+    .bind(update.price.map(|p| p.as_minor() as i32))
     .fetch_optional(executor)
     .await?;
 
@@ -157,15 +151,10 @@ impl ShopOfferingStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    sqlx::query!(
-      r#"
-      DELETE FROM shop_offerings
-      WHERE id = $1
-      "#,
-      id.into_inner()
-    )
-    .execute(executor)
-    .await?;
+    sqlx::query("DELETE FROM shop_offerings WHERE id = $1")
+      .bind(id.into_inner())
+      .execute(executor)
+      .await?;
 
     Ok(())
   }
@@ -177,15 +166,14 @@ impl ShopOfferingStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      ShopOfferingRow,
+    let row = sqlx::query_as::<_, ShopOfferingRow>(
       r#"
       SELECT id, shop_id, name, description, price_cents, created_at, updated_at
       FROM shop_offerings
       WHERE id = $1
       "#,
-      id.into_inner()
     )
+    .bind(id.into_inner())
     .fetch_optional(executor)
     .await?;
 
@@ -199,15 +187,14 @@ impl ShopOfferingStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let rows = sqlx::query_as!(
-      ShopOfferingRow,
+    let rows = sqlx::query_as::<_, ShopOfferingRow>(
       r#"
       SELECT id, shop_id, name, description, price_cents, created_at, updated_at
       FROM shop_offerings
       WHERE shop_id = $1
       "#,
-      shop_id.into_inner()
     )
+    .bind(shop_id.into_inner())
     .fetch_all(executor)
     .await?;
 
@@ -226,16 +213,15 @@ impl ShopMemberStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      ShopMemberRow,
+    let row = sqlx::query_as::<_, ShopMemberRow>(
       r#"
       INSERT INTO shop_members (shop_id, user_id)
       VALUES ($1, $2)
       RETURNING id, shop_id, user_id, created_at, updated_at
       "#,
-      shop_id.into_inner(),
-      user_id.into_inner(),
     )
+    .bind(shop_id.into_inner())
+    .bind(user_id.into_inner())
     .fetch_one(executor)
     .await?;
 
@@ -250,16 +236,11 @@ impl ShopMemberStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    sqlx::query!(
-      r#"
-      DELETE FROM shop_members
-      WHERE shop_id = $1 AND user_id = $2
-      "#,
-      shop_id.into_inner(),
-      user_id.into_inner(),
-    )
-    .execute(executor)
-    .await?;
+    sqlx::query("DELETE FROM shop_members WHERE shop_id = $1 AND user_id = $2")
+      .bind(shop_id.into_inner())
+      .bind(user_id.into_inner())
+      .execute(executor)
+      .await?;
 
     Ok(())
   }
@@ -271,15 +252,14 @@ impl ShopMemberStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      ShopMemberRow,
+    let row = sqlx::query_as::<_, ShopMemberRow>(
       r#"
       SELECT id, shop_id, user_id, created_at, updated_at
       FROM shop_members
       WHERE id = $1
       "#,
-      id.into_inner()
     )
+    .bind(id.into_inner())
     .fetch_optional(executor)
     .await?;
 
@@ -294,16 +274,15 @@ impl ShopMemberStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      ShopMemberRow,
+    let row = sqlx::query_as::<_, ShopMemberRow>(
       r#"
       SELECT id, shop_id, user_id, created_at, updated_at
       FROM shop_members
       WHERE shop_id = $1 AND user_id = $2
       "#,
-      shop_id.into_inner(),
-      user_id.into_inner(),
     )
+    .bind(shop_id.into_inner())
+    .bind(user_id.into_inner())
     .fetch_optional(executor)
     .await?;
 
@@ -317,15 +296,14 @@ impl ShopMemberStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let rows = sqlx::query_as!(
-      ShopMemberRow,
+    let rows = sqlx::query_as::<_, ShopMemberRow>(
       r#"
       SELECT id, shop_id, user_id, created_at, updated_at
       FROM shop_members
       WHERE shop_id = $1
       "#,
-      shop_id.into_inner()
     )
+    .bind(shop_id.into_inner())
     .fetch_all(executor)
     .await?;
 
@@ -339,15 +317,14 @@ impl ShopMemberStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let rows = sqlx::query_as!(
-      ShopMemberRow,
+    let rows = sqlx::query_as::<_, ShopMemberRow>(
       r#"
       SELECT id, shop_id, user_id, created_at, updated_at
       FROM shop_members
       WHERE user_id = $1
       "#,
-      user_id.into_inner()
     )
+    .bind(user_id.into_inner())
     .fetch_all(executor)
     .await?;
 

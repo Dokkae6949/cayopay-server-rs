@@ -17,6 +17,13 @@ pub enum AppError {
   #[error("Authorization failed")]
   Authorization,
 
+  #[error("Permission denied: requires '{action}:{subject}' in scope '{scope}'")]
+  PermissionDenied {
+    action: String,
+    subject: String,
+    scope: String,
+  },
+
   #[error("User already exists")]
   UserAlreadyExists,
 

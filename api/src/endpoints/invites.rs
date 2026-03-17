@@ -6,11 +6,10 @@ use crate::{
 use application::state::AppState;
 use axum::{
   extract::{Path, State},
-  http::Request,
   routing::{get, post},
   Json, Router,
 };
-use domain::{Email, Permission, RawPassword};
+use domain::{Email, RawPassword};
 
 #[utoipa::path(
   post,
@@ -31,15 +30,15 @@ pub async fn create_invite(
   authz: Authz,
   ValidatedJson(payload): ValidatedJson<InviteRequest>,
 ) -> AppResult<()> {
-  authz.require(Permission::SendInvite)?;
-  authz.can_assign(payload.role)?;
+  // Check that the authenticated user has permission to send invites
+  authz.require("send", "invite").await?;
 
   let email = Email::new(payload.email);
-  let user = authz.0;
+  let user_id = authz.user_id();
 
   state
     .invite_service
-    .create_invite(user.id, email, payload.role)
+    .create_invite(user_id, email, payload.role)
     .await?;
 
   Ok(())
@@ -62,9 +61,9 @@ pub async fn get_invites(
   State(state): State<AppState>,
   authz: Authz,
 ) -> AppResult<Json<Vec<InviteResponse>>> {
-  authz.require(Permission::ViewInvite)?;
+  // Check that the authenticated user has permission to view invites
+  authz.require("view", "invite").await?;
 
-  // Get list of invites
   let invites = state.invite_service.get_all().await?;
   let response = invites
     .into_iter()

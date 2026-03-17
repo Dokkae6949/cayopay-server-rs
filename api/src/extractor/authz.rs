@@ -1,43 +1,87 @@
 use crate::extractor::Authn;
-use application::{error::AppError, state::AppState};
+use application::{error::AppResult, services::AuthorizationService, state::AppState};
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
-use domain::{Permission, Role, User};
+use domain::{User, UserId};
+use uuid::Uuid;
 
 use crate::error::ApiError;
 
-pub struct Authz(pub User);
+/// `Authz` is an Axum extractor that requires an authenticated session and provides
+/// runtime permission checking close to the protected operation.
+///
+/// # Usage in handlers
+///
+/// ```rust
+/// // Global permission check
+/// async fn my_handler(authz: Authz) -> impl IntoResponse {
+///   authz.require("send", "invite").await?;
+///   // ... protected code
+/// }
+///
+/// // Scoped permission check
+/// async fn shop_handler(authz: Authz, Path(shop_id): Path<Uuid>) -> impl IntoResponse {
+///   authz.require_scoped("manage", "inventory", "shop", shop_id).await?;
+///   // ... protected code specific to this shop
+/// }
+/// ```
+pub struct Authz {
+  pub user: User,
+  authz_service: AuthorizationService,
+}
 
 impl Authz {
-  pub fn can_assign(&self, target_role: Role) -> Result<(), AppError> {
-    if self.0.role.can_assign_role(target_role) {
-      Ok(())
-    } else {
-      Err(AppError::Authorization)
-    }
+  /// Returns the ID of the authenticated user.
+  pub fn user_id(&self) -> UserId {
+    self.user.id
   }
 
-  pub fn require(&self, perm: Permission) -> Result<(), AppError> {
-    if self.0.role.has_permission(perm) {
-      Ok(())
-    } else {
-      Err(AppError::Authorization)
-    }
+  /// Checks that the user has a global permission (`action:subject`).
+  ///
+  /// Permission is resolved by traversing all roles assigned to this user
+  /// (including inherited roles) and checking for a matching permission entry.
+  pub async fn require(&self, action: &str, subject: &str) -> AppResult<()> {
+    self.authz_service.require(self.user.id, action, subject).await
   }
 
-  pub fn require_any(&self, perms: &[Permission]) -> Result<(), AppError> {
-    if perms.iter().any(|p| self.0.role.has_permission(*p)) {
-      Ok(())
-    } else {
-      Err(AppError::Authorization)
-    }
+  /// Checks that the user has a permission in a specific resource scope.
+  ///
+  /// A global version of the same permission also satisfies this check, so
+  /// admins with global `manage:inventory` access can manage any shop's inventory.
+  pub async fn require_scoped(
+    &self,
+    action: &str,
+    subject: &str,
+    scope_kind: &str,
+    scope_id: Uuid,
+  ) -> AppResult<()> {
+    self
+      .authz_service
+      .require_scoped(self.user.id, action, subject, scope_kind, scope_id)
+      .await
   }
 
-  pub fn require_all(&self, perms: &[Permission]) -> Result<(), AppError> {
-    if perms.iter().all(|p| self.0.role.has_permission(*p)) {
-      Ok(())
-    } else {
-      Err(AppError::Authorization)
-    }
+  /// Returns `true` if the user has the global permission, `false` otherwise.
+  pub async fn has_permission(&self, action: &str, subject: &str) -> bool {
+    self
+      .authz_service
+      .has_permission(self.user.id, action, subject, None)
+      .await
+      .unwrap_or(false)
+  }
+
+  /// Returns `true` if the user has the permission in the given resource scope.
+  pub async fn has_permission_scoped(
+    &self,
+    action: &str,
+    subject: &str,
+    scope_kind: &str,
+    scope_id: Uuid,
+  ) -> bool {
+    self
+      .authz_service
+      .has_permission(self.user.id, action, subject, Some((scope_kind, scope_id)))
+      .await
+      .unwrap_or(false)
   }
 }
 
@@ -50,71 +94,9 @@ impl FromRequestParts<AppState> for Authz {
     state: &AppState,
   ) -> Result<Self, Self::Rejection> {
     let user = Authn::from_request_parts(parts, state).await?.0;
-    Ok(Authz(user))
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use chrono::Utc;
-  use domain::{Email, HashedPassword, Id};
-
-  fn create_user(role: Role) -> User {
-    User {
-      id: Id::new(),
-      actor_id: Id::new(),
-      email: Email::new("test@example.com".to_string()),
-      password: HashedPassword::new("hash".to_string()),
-      first_name: "Test".to_string(),
-      last_name: "User".to_string(),
-      role,
-      created_at: Utc::now(),
-      updated_at: None,
-    }
-  }
-
-  #[test]
-  fn test_authz_can_assign() {
-    let owner = Authz(create_user(Role::Owner));
-    assert!(owner.can_assign(Role::Admin).is_ok());
-    assert!(owner.can_assign(Role::Owner).is_ok());
-
-    let admin = Authz(create_user(Role::Admin));
-    assert!(admin.can_assign(Role::Admin).is_ok());
-    assert!(admin.can_assign(Role::Owner).is_err());
-  }
-
-  #[test]
-  fn test_authz_require() {
-    let owner = Authz(create_user(Role::Owner));
-    assert!(owner.require(Permission::SendInvite).is_ok());
-
-    let admin = Authz(create_user(Role::Admin));
-    assert!(admin.require(Permission::SendInvite).is_ok());
-    assert!(admin.require(Permission::ConfigureSettings).is_err());
-  }
-
-  #[test]
-  fn test_authz_require_any() {
-    let admin = Authz(create_user(Role::Admin));
-    assert!(admin
-      .require_any(&[Permission::SendInvite, Permission::ConfigureSettings])
-      .is_ok());
-    assert!(admin.require_any(&[Permission::ConfigureSettings]).is_err());
-  }
-
-  #[test]
-  fn test_authz_require_all() {
-    let owner = Authz(create_user(Role::Owner));
-    assert!(owner
-      .require_all(&[Permission::SendInvite, Permission::ConfigureSettings])
-      .is_ok());
-
-    let admin = Authz(create_user(Role::Admin));
-    assert!(admin
-      .require_all(&[Permission::SendInvite, Permission::ConfigureSettings])
-      .is_err());
-    assert!(admin.require_all(&[Permission::SendInvite]).is_ok());
+    Ok(Authz {
+      user,
+      authz_service: state.authz_service.clone(),
+    })
   }
 }

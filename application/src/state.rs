@@ -1,13 +1,16 @@
 use sqlx::PgPool;
 
 use crate::config::Config;
-use crate::services::{AuthService, GuestService, InviteService, SessionService, UserService};
+use crate::services::{
+  AuthService, AuthorizationService, GuestService, InviteService, SessionService, UserService,
+};
 use infra::services::{EmailService, EmailServiceConfig};
 
 #[derive(Clone)]
 pub struct AppState {
   pub config: Config,
   pub auth_service: AuthService,
+  pub authz_service: AuthorizationService,
   pub session_service: SessionService,
   pub invite_service: InviteService,
   pub user_service: UserService,
@@ -27,6 +30,7 @@ impl AppState {
 
     let email_service = EmailService::new(email_config);
     let auth_service = AuthService::new(pool.clone());
+    let authz_service = AuthorizationService::new(pool.clone());
     let user_service = UserService::new(pool.clone());
     let guest_service = GuestService::new(pool.clone());
     let invite_service = InviteService::new(pool.clone(), email_service, auth_service.clone());
@@ -34,6 +38,7 @@ impl AppState {
     Self {
       config: config.clone(),
       auth_service,
+      authz_service,
       session_service: SessionService::new(pool.clone(), config.session_expiration_days),
       invite_service,
       user_service,

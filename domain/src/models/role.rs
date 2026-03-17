@@ -1,137 +1,88 @@
-use serde::{Deserialize, Serialize};
-use std::fmt::Display;
-use utoipa::ToSchema;
+use chrono::{DateTime, Utc};
+use uuid::Uuid;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize, ToSchema)]
-pub enum Permission {
-  ConfigureSettings,
+use crate::{models::permission::PermissionId, Id, UserId};
 
-  SendInvite,
-  ViewInvite,
+pub type RoleId = Id<Role>;
 
-  RemoveUser,
-  ReadUserDetails,
-
-  RemoveGuest,
-  ReadGuestDetails,
+/// A role is a named set of permissions that can be assigned to users.
+/// Roles are stored in the database and can be created and modified at runtime.
+/// Roles can optionally inherit all permissions from another role.
+#[derive(Debug, Clone)]
+pub struct Role {
+  pub id: RoleId,
+  pub name: String,
+  pub description: Option<String>,
+  pub inherited_from_role_id: Option<RoleId>,
+  pub created_at: DateTime<Utc>,
 }
 
-#[derive(
-  Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, ToSchema,
-)]
-#[sqlx(type_name = "text", rename_all = "lowercase")]
-#[serde(rename_all = "lowercase")]
-pub enum Role {
-  #[default]
-  Undefined,
+pub type RolePermissionId = Id<RolePermission>;
 
-  Owner,
-  Admin,
+/// Links a role to a permission with an optional scope.
+///
+/// - When `scope_kind` is `"global"` and `scope_id` is `None`, the permission
+///   applies everywhere with no resource restriction.
+/// - When `scope_kind` is e.g. `"shop"` and `scope_id` is `Some(uuid)`, the
+///   permission applies only to that specific shop.
+///
+/// This enables checks like: "can user transfer funds **in shop:123**?"
+#[derive(Debug, Clone)]
+pub struct RolePermission {
+  pub id: RolePermissionId,
+  pub role_id: RoleId,
+  pub permission_id: PermissionId,
+  /// Resource kind this permission is scoped to: "global", "shop", "register", "event", etc.
+  pub scope_kind: String,
+  /// The specific resource UUID. `None` means the permission applies to all resources of that kind.
+  pub scope_id: Option<Uuid>,
+  pub created_at: DateTime<Utc>,
 }
 
-impl Display for Role {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let s = match self {
-      Role::Owner => "owner",
-      Role::Admin => "admin",
-      Role::Undefined => "undefined",
-    };
-    write!(f, "{}", s)
-  }
-}
+pub type UserRoleId = Id<UserRole>;
 
-impl From<String> for Role {
-  fn from(s: String) -> Self {
-    match s.as_str() {
-      "owner" => Role::Owner,
-      "admin" => Role::Admin,
-      _ => Role::Undefined,
-    }
-  }
-}
-
-impl Role {
-  pub fn permissions(&self) -> Vec<Permission> {
-    match self {
-      Role::Owner => vec![
-        Permission::ConfigureSettings,
-        Permission::SendInvite,
-        Permission::ViewInvite,
-        Permission::RemoveUser,
-        Permission::ReadUserDetails,
-        Permission::RemoveGuest,
-        Permission::ReadGuestDetails,
-      ],
-      Role::Admin => vec![
-        Permission::SendInvite,
-        Permission::ViewInvite,
-        Permission::RemoveUser,
-        Permission::ReadUserDetails,
-        Permission::RemoveGuest,
-        Permission::ReadGuestDetails,
-      ],
-      Role::Undefined => vec![],
-    }
-  }
-
-  pub fn has_permission(&self, perm: Permission) -> bool {
-    self.permissions().contains(&perm)
-  }
-
-  pub fn can_assign_role(&self, target_role: Role) -> bool {
-    match self {
-      Role::Owner => matches!(target_role, Role::Owner | Role::Admin),
-      Role::Admin => matches!(target_role, Role::Admin),
-      Role::Undefined => false,
-    }
-  }
+/// Links a user to a role, granting all permissions attached to that role.
+#[derive(Debug, Clone)]
+pub struct UserRole {
+  pub id: UserRoleId,
+  pub user_id: UserId,
+  pub role_id: RoleId,
+  pub created_at: DateTime<Utc>,
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::Id;
 
-  #[test]
-  fn test_role_permissions() {
-    let owner_perms = Role::Owner.permissions();
-    assert!(owner_perms.contains(&Permission::ConfigureSettings));
-    assert!(owner_perms.contains(&Permission::SendInvite));
-
-    let admin_perms = Role::Admin.permissions();
-    assert!(!admin_perms.contains(&Permission::ConfigureSettings));
-    assert!(admin_perms.contains(&Permission::SendInvite));
-
-    let undefined_perms = Role::Undefined.permissions();
-    assert!(undefined_perms.is_empty());
+  fn make_role(name: &str) -> Role {
+    Role {
+      id: Id::new(),
+      name: name.to_string(),
+      description: None,
+      inherited_from_role_id: None,
+      created_at: Utc::now(),
+    }
   }
 
   #[test]
-  fn test_has_permission() {
-    assert!(Role::Owner.has_permission(Permission::ConfigureSettings));
-    assert!(Role::Owner.has_permission(Permission::SendInvite));
-
-    assert!(!Role::Admin.has_permission(Permission::ConfigureSettings));
-    assert!(Role::Admin.has_permission(Permission::SendInvite));
-
-    assert!(!Role::Undefined.has_permission(Permission::ConfigureSettings));
-    assert!(!Role::Undefined.has_permission(Permission::SendInvite));
+  fn test_role_created() {
+    let role = make_role("owner");
+    assert_eq!(role.name, "owner");
+    assert!(role.description.is_none());
+    assert!(role.inherited_from_role_id.is_none());
   }
 
   #[test]
-  fn test_can_assign_role() {
-    // Owner can assign Owner and Admin
-    assert!(Role::Owner.can_assign_role(Role::Owner));
-    assert!(Role::Owner.can_assign_role(Role::Admin));
-    assert!(!Role::Owner.can_assign_role(Role::Undefined));
-
-    // Admin can assign Admin only
-    assert!(!Role::Admin.can_assign_role(Role::Owner));
-    assert!(Role::Admin.can_assign_role(Role::Admin));
-    assert!(!Role::Admin.can_assign_role(Role::Undefined));
-
-    // Undefined can assign nothing
-    assert!(!Role::Undefined.can_assign_role(Role::Owner));
-    assert!(!Role::Undefined.can_assign_role(Role::Admin));
-    assert!(!Role::Undefined.can_assign_role(Role::Undefined));
+  fn test_role_with_inheritance() {
+    let parent = make_role("base");
+    let child = Role {
+      id: Id::new(),
+      name: "child".to_string(),
+      description: None,
+      inherited_from_role_id: Some(parent.id),
+      created_at: Utc::now(),
+    };
+    assert_eq!(child.inherited_from_role_id, Some(parent.id));
   }
 }

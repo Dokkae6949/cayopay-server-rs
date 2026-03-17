@@ -6,10 +6,13 @@ use crate::{
   error::{AppError, AppResult},
   services::auth::AuthService,
 };
-use domain::{Email, Invite, RawPassword, Role, User, UserId};
+use domain::{Email, Invite, RawPassword, User, UserId};
 use infra::{
   services::EmailService,
-  stores::{models::InviteCreation, InviteStore, UserStore},
+  stores::{
+    models::{InviteCreation, UserRoleCreation},
+    InviteStore, RoleStore, UserRoleStore, UserStore,
+  },
 };
 
 #[derive(Clone)]
@@ -32,8 +35,16 @@ impl InviteService {
     &self,
     invitor: UserId,
     email: Email,
-    role: Role,
+    role: String,
   ) -> AppResult<Invite> {
+    // Ensure the role exists before sending an invite
+    if RoleStore::find_by_name(&self.pool, &role).await?.is_none() {
+      return Err(AppError::BadRequest(format!(
+        "Role '{}' does not exist",
+        role
+      )));
+    }
+
     if let Some(invite) = InviteStore::find_by_email(&self.pool, &email).await? {
       if invite.is_expired() {
         InviteStore::delete_by_id(&self.pool, &invite.id).await?;
@@ -84,14 +95,27 @@ impl InviteService {
 
     let user = self
       .auth_service
-      .register(
-        invite.email.clone(),
-        password,
-        first_name,
-        last_name,
-        invite.role,
+      .register(invite.email.clone(), password, first_name, last_name)
+      .await?;
+
+    // Assign the role from the invite to the new user (role may no longer exist)
+    if let Some(role) = RoleStore::find_by_name(&self.pool, &invite.role).await? {
+      UserRoleStore::assign(
+        &self.pool,
+        &UserRoleCreation {
+          user_id: user.id,
+          role_id: role.id,
+        },
       )
       .await?;
+    } else {
+      // The role was deleted after the invite was created. Delete the user and
+      // surface an error so the invite can be re-issued with a valid role.
+      return Err(AppError::BadRequest(format!(
+        "The role '{}' no longer exists; the invite must be re-issued",
+        invite.role
+      )));
+    }
 
     InviteStore::delete_by_id(&self.pool, &invite.id).await?;
 
