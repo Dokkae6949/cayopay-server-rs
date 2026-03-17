@@ -1,5 +1,5 @@
 use crate::{error::AppResult, extractor::Authn, models::UserResponse};
-use application::state::AppState;
+use application::{services::user, state::AppState};
 use axum::{extract::State, routing::get, Json, Router};
 
 /// List all users
@@ -16,7 +16,7 @@ pub async fn list_users(
   State(state): State<AppState>,
   authn: Authn,
 ) -> AppResult<Json<Vec<UserResponse>>> {
-  let users = state.user_service.get_all(authn.id).await?;
+  let users = user::list_all(&state.pool, &state.authz_service, authn.id).await?;
   let response: Vec<UserResponse> = users.into_iter().map(Into::into).collect();
 
   Ok(Json(response))

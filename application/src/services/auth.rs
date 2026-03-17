@@ -7,70 +7,56 @@ use infra::stores::{
   ActorStore, UserStore, WalletStore,
 };
 
-#[derive(Clone)]
-pub struct AuthService {
-  pool: PgPool,
+pub async fn login(pool: &PgPool, email: Email, password: RawPassword) -> AppResult<User> {
+  let user = UserStore::find_by_email(pool, &email)
+    .await?
+    .ok_or(AppError::Authentication)?;
+
+  if !user.password.verify(&password)? {
+    return Err(AppError::Authentication);
+  }
+
+  Ok(user)
 }
 
-impl AuthService {
-  pub fn new(pool: PgPool) -> Self {
-    Self { pool }
+pub async fn register(
+  pool: &PgPool,
+  email: Email,
+  password: RawPassword,
+  first_name: String,
+  last_name: String,
+) -> AppResult<User> {
+  if UserStore::find_by_email(pool, &email).await?.is_some() {
+    return Err(AppError::UserAlreadyExists);
   }
 
-  pub async fn login(&self, email: Email, password: RawPassword) -> AppResult<User> {
-    let user = UserStore::find_by_email(&self.pool, &email)
-      .await?
-      .ok_or(AppError::Authentication)?;
+  let mut tx = pool.begin().await?;
 
-    if !user.password.verify(&password)? {
-      return Err(AppError::Authentication);
-    }
+  let actor = ActorStore::create(&mut *tx).await?;
 
-    Ok(user)
-  }
+  let user = UserStore::create(
+    &mut *tx,
+    &UserCreation {
+      actor_id: actor,
+      email,
+      password: password.hash()?,
+      first_name,
+      last_name,
+    },
+  )
+  .await?;
 
-  pub async fn register(
-    &self,
-    email: Email,
-    password: RawPassword,
-    first_name: String,
-    last_name: String,
-  ) -> AppResult<User> {
-    if UserStore::find_by_email(&self.pool, &email)
-      .await?
-      .is_some()
-    {
-      return Err(AppError::UserAlreadyExists);
-    }
+  WalletStore::create(
+    &mut *tx,
+    &WalletCreation {
+      owner: Some(actor),
+      label: None,
+      allow_overdraft: false,
+    },
+  )
+  .await?;
 
-    let mut tx = self.pool.begin().await?;
+  tx.commit().await?;
 
-    let actor = ActorStore::create(&mut *tx).await?;
-
-    let user = UserStore::create(
-      &mut *tx,
-      &UserCreation {
-        actor_id: actor,
-        email,
-        password: password.hash()?,
-        first_name,
-        last_name,
-      },
-    )
-    .await?;
-
-    WalletStore::create(
-      &mut *tx,
-      &WalletCreation {
-        owner: Some(actor),
-        label: None,
-        allow_overdraft: false,
-      },
-    )
-    .await?;
-
-    tx.commit().await?;
-
-    Ok(user)
-  }
+  Ok(user)
 }

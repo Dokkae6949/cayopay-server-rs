@@ -1,3 +1,7 @@
+use application::{
+  services::{auth, session},
+  state::AppState,
+};
 use axum::{
   extract::State,
   routing::{get, post},
@@ -10,7 +14,6 @@ use crate::{
   extractor::{Authn, ValidatedJson},
   models::{LoginRequest, UserResponse},
 };
-use application::state::AppState;
 use domain::{Email, RawPassword};
 
 #[utoipa::path(
@@ -31,8 +34,8 @@ pub async fn login(
   let email = Email::new(payload.email);
   let password = RawPassword::new(payload.password);
 
-  let user = state.auth_service.login(email, password).await?;
-  let session = state.session_service.create_session(user.id).await?;
+  let user = auth::login(&state.pool, email, password).await?;
+  let session = session::create(&state.pool, user.id, state.config.session_expiration_days).await?;
 
   // TODO: Control cookie attributes based on environment (e.g., Secure in production)
   let cookie = Cookie::build((state.config.session_cookie_name.clone(), session.token))

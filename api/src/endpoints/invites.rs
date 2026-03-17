@@ -3,7 +3,7 @@ use crate::{
   extractor::{Authn, ValidatedJson},
   models::{AcceptInviteRequest, InviteRequest, InviteResponse},
 };
-use application::state::AppState;
+use application::{services::invite, state::AppState};
 use axum::{
   extract::{Path, State},
   routing::{get, post},
@@ -32,10 +32,15 @@ pub async fn create_invite(
 ) -> AppResult<()> {
   let email = Email::new(payload.email);
 
-  state
-    .invite_service
-    .create_invite(authn.id, email, payload.role)
-    .await?;
+  invite::create(
+    &state.pool,
+    &state.authz_service,
+    &state.email_service,
+    authn.id,
+    email,
+    payload.role,
+  )
+  .await?;
 
   Ok(())
 }
@@ -57,7 +62,7 @@ pub async fn get_invites(
   State(state): State<AppState>,
   authn: Authn,
 ) -> AppResult<Json<Vec<InviteResponse>>> {
-  let invites = state.invite_service.get_all(authn.id).await?;
+  let invites = invite::list_all(&state.pool, &state.authz_service, authn.id).await?;
   let response = invites
     .into_iter()
     .map(InviteResponse::from)
@@ -84,15 +89,14 @@ pub async fn accept_invite(
   Path(token): Path<String>,
   ValidatedJson(payload): ValidatedJson<AcceptInviteRequest>,
 ) -> AppResult<()> {
-  state
-    .invite_service
-    .accept_invite(
-      &token,
-      RawPassword::new(payload.password),
-      payload.first_name,
-      payload.last_name,
-    )
-    .await?;
+  invite::accept(
+    &state.pool,
+    &token,
+    RawPassword::new(payload.password),
+    payload.first_name,
+    payload.last_name,
+  )
+  .await?;
 
   Ok(())
 }
