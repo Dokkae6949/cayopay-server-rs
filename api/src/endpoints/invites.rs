@@ -1,6 +1,6 @@
 use crate::{
   error::AppResult,
-  extractor::{Authz, ValidatedJson},
+  extractor::{Authn, ValidatedJson},
   models::{AcceptInviteRequest, InviteRequest, InviteResponse},
 };
 use application::state::AppState;
@@ -9,7 +9,7 @@ use axum::{
   routing::{get, post},
   Json, Router,
 };
-use domain::{models::permission::Permission, Email, RawPassword};
+use domain::{Email, RawPassword};
 
 #[utoipa::path(
   post,
@@ -27,18 +27,14 @@ use domain::{models::permission::Permission, Email, RawPassword};
 )]
 pub async fn create_invite(
   State(state): State<AppState>,
-  authz: Authz,
+  authn: Authn,
   ValidatedJson(payload): ValidatedJson<InviteRequest>,
 ) -> AppResult<()> {
-  // Check that the authenticated user has permission to send invites
-  authz.require(Permission::SendInvite).await?;
-
   let email = Email::new(payload.email);
-  let user_id = authz.user_id();
 
   state
     .invite_service
-    .create_invite(user_id, email, payload.role)
+    .create_invite(authn.id, email, payload.role)
     .await?;
 
   Ok(())
@@ -59,12 +55,9 @@ pub async fn create_invite(
 #[axum::debug_handler]
 pub async fn get_invites(
   State(state): State<AppState>,
-  authz: Authz,
+  authn: Authn,
 ) -> AppResult<Json<Vec<InviteResponse>>> {
-  // Check that the authenticated user has permission to view invites
-  authz.require(Permission::ViewInvite).await?;
-
-  let invites = state.invite_service.get_all().await?;
+  let invites = state.invite_service.get_all(authn.id).await?;
   let response = invites
     .into_iter()
     .map(InviteResponse::from)

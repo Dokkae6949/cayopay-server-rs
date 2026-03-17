@@ -31,9 +31,9 @@ impl AppState {
     let email_service = EmailService::new(email_config);
     let auth_service = AuthService::new(pool.clone());
     let authz_service = AuthorizationService::new(pool.clone());
-    let user_service = UserService::new(pool.clone());
-    let guest_service = GuestService::new(pool.clone());
-    let invite_service = InviteService::new(pool.clone(), email_service, auth_service.clone());
+    let user_service = UserService::new(pool.clone(), authz_service.clone());
+    let guest_service = GuestService::new(pool.clone(), authz_service.clone());
+    let invite_service = InviteService::new(pool.clone(), email_service, auth_service.clone(), authz_service.clone());
 
     Self {
       config: config.clone(),

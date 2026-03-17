@@ -4,9 +4,9 @@ use uuid::Uuid;
 
 use crate::{
   error::{AppError, AppResult},
-  services::auth::AuthService,
+  services::{auth::AuthService, AuthorizationService},
 };
-use domain::{Email, Invite, RawPassword, User, UserId};
+use domain::{models::permission::Permission, Email, Invite, RawPassword, User, UserId};
 use infra::{
   services::EmailService,
   stores::{
@@ -20,14 +20,21 @@ pub struct InviteService {
   pool: PgPool,
   email_service: EmailService,
   auth_service: AuthService,
+  authz_service: AuthorizationService,
 }
 
 impl InviteService {
-  pub fn new(pool: PgPool, email_service: EmailService, auth_service: AuthService) -> Self {
+  pub fn new(
+    pool: PgPool,
+    email_service: EmailService,
+    auth_service: AuthService,
+    authz_service: AuthorizationService,
+  ) -> Self {
     Self {
       pool,
       email_service,
       auth_service,
+      authz_service,
     }
   }
 
@@ -37,6 +44,8 @@ impl InviteService {
     email: Email,
     role: String,
   ) -> AppResult<Invite> {
+    self.authz_service.require(invitor, Permission::SendInvite).await?;
+
     // Ensure the role exists before sending an invite
     if RoleStore::find_by_name(&self.pool, &role).await?.is_none() {
       return Err(AppError::BadRequest(format!(
@@ -122,7 +131,8 @@ impl InviteService {
     Ok(user)
   }
 
-  pub async fn get_all(&self) -> AppResult<Vec<Invite>> {
+  pub async fn get_all(&self, caller: UserId) -> AppResult<Vec<Invite>> {
+    self.authz_service.require(caller, Permission::ViewInvite).await?;
     Ok(InviteStore::list_all(&self.pool).await?)
   }
 }
