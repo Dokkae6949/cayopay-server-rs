@@ -7,18 +7,6 @@ use infra::stores::{
   ActorStore, UserStore, WalletStore,
 };
 
-pub async fn login(pool: &PgPool, email: Email, password: RawPassword) -> AppResult<User> {
-  let user = UserStore::find_by_email(pool, &email)
-    .await?
-    .ok_or(AppError::Authentication)?;
-
-  if !user.password.verify(&password)? {
-    return Err(AppError::Authentication);
-  }
-
-  Ok(user)
-}
-
 pub async fn register(
   pool: &PgPool,
   email: Email,

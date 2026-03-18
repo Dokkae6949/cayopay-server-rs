@@ -1,6 +1,8 @@
 use crate::{error::AppResult, extractor::Authn, models::GuestResponse};
-use application::{services::guest, state::AppState};
+use application::{error::AppError, state::AppState};
 use axum::{extract::State, routing::get, Json, Router};
+use domain::models::permission::Permission;
+use infra::stores::GuestStore;
 
 #[utoipa::path(
     get,
@@ -15,10 +17,9 @@ pub async fn list_guests(
   State(state): State<AppState>,
   authn: Authn,
 ) -> AppResult<Json<Vec<GuestResponse>>> {
-  let guests = guest::list_all(&state.pool, &state.authz_service, authn.id).await?;
-  let response: Vec<GuestResponse> = guests.into_iter().map(Into::into).collect();
-
-  Ok(Json(response))
+  state.authz_service.require(authn.id, Permission::ReadGuest).await?;
+  let guests = GuestStore::list_all(&state.pool).await.map_err(AppError::from)?;
+  Ok(Json(guests.into_iter().map(Into::into).collect()))
 }
 
 pub fn router() -> Router<AppState> {

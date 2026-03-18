@@ -1,13 +1,12 @@
-use application::{
-  services::{auth, session},
-  state::AppState,
-};
+use application::{error::AppError, state::AppState};
 use axum::{
   extract::State,
   routing::{get, post},
   Json, Router,
 };
 use axum_extra::extract::cookie::{self, Cookie, CookieJar, SameSite};
+use chrono::Duration;
+use uuid::Uuid;
 
 use crate::{
   error::AppResult,
@@ -15,6 +14,7 @@ use crate::{
   models::{LoginRequest, UserResponse},
 };
 use domain::{Email, RawPassword};
+use infra::stores::{models::SessionCreation, SessionStore, UserStore};
 
 #[utoipa::path(
   post,
@@ -34,8 +34,27 @@ pub async fn login(
   let email = Email::new(payload.email);
   let password = RawPassword::new(payload.password);
 
-  let user = auth::login(&state.pool, email, password).await?;
-  let session = session::create(&state.pool, user.id, state.config.session_expiration_days).await?;
+  let user = UserStore::find_by_email(&state.pool, &email)
+    .await
+    .map_err(AppError::from)?
+    .ok_or(AppError::Authentication)?;
+
+  if !user.password.verify(&password).map_err(AppError::from)? {
+    return Err(AppError::Authentication.into());
+  }
+
+  let session = SessionStore::create(
+    &state.pool,
+    &SessionCreation {
+      user_id: user.id.into(),
+      token: Uuid::new_v4().to_string(),
+      user_agent: None,
+      ip_address: None,
+      expires_in: Duration::days(state.config.session_expiration_days),
+    },
+  )
+  .await
+  .map_err(AppError::from)?;
 
   // TODO: Control cookie attributes based on environment (e.g., Secure in production)
   let cookie = Cookie::build((state.config.session_cookie_name.clone(), session.token))

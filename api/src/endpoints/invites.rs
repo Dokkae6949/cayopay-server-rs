@@ -3,13 +3,19 @@ use crate::{
   extractor::{Authn, ValidatedJson},
   models::{AcceptInviteRequest, InviteRequest, InviteResponse},
 };
-use application::{services::invite, state::AppState};
+use application::{error::AppError, services::auth, state::AppState};
 use axum::{
   extract::{Path, State},
   routing::{get, post},
   Json, Router,
 };
-use domain::{Email, RawPassword};
+use chrono::Duration;
+use domain::{models::permission::Permission, Email, RawPassword};
+use infra::stores::{
+  models::{InviteCreation, UserRoleCreation},
+  InviteStore, RoleStore, UserRoleStore, UserStore,
+};
+use uuid::Uuid;
 
 #[utoipa::path(
   post,
@@ -30,17 +36,44 @@ pub async fn create_invite(
   authn: Authn,
   ValidatedJson(payload): ValidatedJson<InviteRequest>,
 ) -> AppResult<()> {
+  state.authz_service.require(authn.id, Permission::SendInvite).await?;
+
+  if RoleStore::find_by_name(&state.pool, &payload.role).await.map_err(AppError::from)?.is_none() {
+    return Err(AppError::BadRequest(format!("Role '{}' does not exist", payload.role)).into());
+  }
+
   let email = Email::new(payload.email);
 
-  invite::create(
+  if let Some(invite) = InviteStore::find_by_email(&state.pool, &email).await.map_err(AppError::from)? {
+    if invite.is_expired() {
+      InviteStore::delete_by_id(&state.pool, &invite.id).await.map_err(AppError::from)?;
+    } else {
+      return Err(AppError::InviteAlreadySent.into());
+    }
+  }
+
+  let inviter_name = UserStore::find_by_id(&state.pool, &authn.id)
+    .await
+    .map_err(AppError::from)?
+    .map(|u| format!("{} {}", u.first_name, u.last_name))
+    .ok_or(AppError::InvitorMissing(authn.id))?;
+
+  let token = Uuid::new_v4().to_string();
+
+  InviteStore::create(
     &state.pool,
-    &state.authz_service,
-    &state.email_service,
-    authn.id,
-    email,
-    payload.role,
+    &InviteCreation {
+      invitor: authn.id,
+      email: email.clone(),
+      token: token.clone(),
+      role: payload.role,
+      expires_in: Duration::days(7),
+    },
   )
-  .await?;
+  .await
+  .map_err(AppError::from)?;
+
+  state.email_service.send_invite(&email, &token, &inviter_name).await.map_err(AppError::from)?;
 
   Ok(())
 }
@@ -62,13 +95,9 @@ pub async fn get_invites(
   State(state): State<AppState>,
   authn: Authn,
 ) -> AppResult<Json<Vec<InviteResponse>>> {
-  let invites = invite::list_all(&state.pool, &state.authz_service, authn.id).await?;
-  let response = invites
-    .into_iter()
-    .map(InviteResponse::from)
-    .collect::<Vec<InviteResponse>>();
-
-  Ok(Json(response))
+  state.authz_service.require(authn.id, Permission::ViewInvite).await?;
+  let invites = InviteStore::list_all(&state.pool).await.map_err(AppError::from)?;
+  Ok(Json(invites.into_iter().map(InviteResponse::from).collect()))
 }
 
 #[utoipa::path(
@@ -89,14 +118,43 @@ pub async fn accept_invite(
   Path(token): Path<String>,
   ValidatedJson(payload): ValidatedJson<AcceptInviteRequest>,
 ) -> AppResult<()> {
-  invite::accept(
+  let invite = InviteStore::find_by_token(&state.pool, &token)
+    .await
+    .map_err(AppError::from)?
+    .ok_or(AppError::NotFound)?;
+
+  if invite.is_expired() {
+    return Err(AppError::InviteExpired.into());
+  }
+
+  let user = auth::register(
     &state.pool,
-    &token,
+    invite.email.clone(),
     RawPassword::new(payload.password),
     payload.first_name,
     payload.last_name,
   )
   .await?;
+
+  let role = RoleStore::find_by_name(&state.pool, &invite.role)
+    .await
+    .map_err(AppError::from)?
+    .ok_or_else(|| AppError::BadRequest(format!(
+      "The role '{}' no longer exists; the invite must be re-issued",
+      invite.role
+    )))?;
+
+  UserRoleStore::assign(
+    &state.pool,
+    &UserRoleCreation {
+      user_id: user.id,
+      role_id: role.id,
+    },
+  )
+  .await
+  .map_err(AppError::from)?;
+
+  InviteStore::delete_by_id(&state.pool, &invite.id).await.map_err(AppError::from)?;
 
   Ok(())
 }
