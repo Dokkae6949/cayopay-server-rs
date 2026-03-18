@@ -3,8 +3,9 @@ use std::ops::Deref;
 
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts, RequestPartsExt};
 use axum_extra::extract::CookieJar;
+use uuid::Uuid;
 
-use application::{error::AppError, services::session, state::AppState};
+use application::{error::AppError, services::{authorization::AuthorizationService, session}, state::AppState};
 use domain::{models::permission::Permission, User};
 
 use crate::error::{ApiError, AppResult};
@@ -17,9 +18,13 @@ const GLOBAL_SCOPE: &str = "global";
 /// pre-loads their full set of global permissions in a single DB round-trip,
 /// so handlers can call the synchronous [`Auth::require`] instead of wiring
 /// `authz_service` + `user_id` through every call-site.
+///
+/// For resource-scoped permission checks use the async [`Auth::require_scoped`],
+/// which performs one additional DB query for the scoped check.
 pub struct Auth {
   pub user: User,
   permissions: HashSet<Permission>,
+  authz: AuthorizationService,
 }
 
 impl Auth {
@@ -37,6 +42,25 @@ impl Auth {
       }
       .into())
     }
+  }
+
+  /// Enforces that the caller holds the given permission scoped to a specific resource.
+  ///
+  /// Example: `auth.require_scoped(Permission::ManageInventory, "shop", shop_id).await?`
+  ///
+  /// A global grant of the same permission (`scope_kind IS NULL`) also satisfies this
+  /// check, so callers with global access can act on any specific resource.
+  pub async fn require_scoped(
+    &self,
+    permission: Permission,
+    scope_kind: &str,
+    scope_id: Uuid,
+  ) -> AppResult<()> {
+    self
+      .authz
+      .require_scoped(self.user.id, permission, scope_kind, scope_id)
+      .await
+      .map_err(Into::into)
   }
 }
 
@@ -76,6 +100,10 @@ impl FromRequestParts<AppState> for Auth {
       .load_global_permissions(user.id)
       .await?;
 
-    Ok(Auth { user, permissions })
+    Ok(Auth {
+      user,
+      permissions,
+      authz: state.authz_service.clone(),
+    })
   }
 }

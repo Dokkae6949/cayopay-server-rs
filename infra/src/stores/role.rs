@@ -14,14 +14,13 @@ impl RoleStore {
   {
     let row = sqlx::query_as::<_, RoleRow>(
       r#"
-      INSERT INTO roles (name, description, inherited_from_role_id)
-      VALUES ($1, $2, $3)
-      RETURNING id, name, description, inherited_from_role_id, created_at
+      INSERT INTO roles (name, description)
+      VALUES ($1, $2)
+      RETURNING id, name, description, created_at
       "#,
     )
     .bind(&creation.name)
     .bind(creation.description.as_ref())
-    .bind(creation.inherited_from_role_id.map(|id| id.into_inner()))
     .fetch_one(executor)
     .await?;
 
@@ -34,7 +33,7 @@ impl RoleStore {
   {
     let row = sqlx::query_as::<_, RoleRow>(
       r#"
-      SELECT id, name, description, inherited_from_role_id, created_at
+      SELECT id, name, description, created_at
       FROM roles
       WHERE id = $1
       "#,
@@ -55,7 +54,7 @@ impl RoleStore {
   {
     let row = sqlx::query_as::<_, RoleRow>(
       r#"
-      SELECT id, name, description, inherited_from_role_id, created_at
+      SELECT id, name, description, created_at
       FROM roles
       WHERE name = $1
       "#,
@@ -73,7 +72,7 @@ impl RoleStore {
   {
     let rows = sqlx::query_as::<_, RoleRow>(
       r#"
-      SELECT id, name, description, inherited_from_role_id, created_at
+      SELECT id, name, description, created_at
       FROM roles
       ORDER BY name
       "#,
@@ -139,7 +138,7 @@ impl RolePermissionStore {
     Ok(())
   }
 
-  /// Lists all permissions directly attached to a role (no inheritance).
+  /// Lists all permissions directly attached to a role.
   pub async fn list_for_role<'c, E>(
     executor: E,
     role_id: &RoleId,
@@ -152,41 +151,6 @@ impl RolePermissionStore {
       SELECT id, role_id, permission, scope_kind, scope_id, created_at
       FROM role_permissions
       WHERE role_id = $1
-      "#,
-    )
-    .bind(role_id.into_inner())
-    .fetch_all(executor)
-    .await?;
-
-    rows
-      .into_iter()
-      .map(|r| r.try_into().map_err(|e: String| sqlx::Error::Decode(e.into())))
-      .collect()
-  }
-
-  /// Lists all permissions for a role, including permissions inherited from parent roles.
-  ///
-  /// Inheritance is resolved recursively via a CTE so the caller does not need to
-  /// make multiple round-trips.
-  pub async fn list_for_role_with_inheritance<'c, E>(
-    executor: E,
-    role_id: &RoleId,
-  ) -> Result<Vec<RolePermission>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
-    let rows = sqlx::query_as::<_, RolePermissionRow>(
-      r#"
-      WITH RECURSIVE role_hierarchy AS (
-        SELECT id, inherited_from_role_id FROM roles WHERE id = $1
-        UNION ALL
-        SELECT r.id, r.inherited_from_role_id
-        FROM roles r
-        JOIN role_hierarchy rh ON r.id = rh.inherited_from_role_id
-      )
-      SELECT rp.id, rp.role_id, rp.permission, rp.scope_kind, rp.scope_id, rp.created_at
-      FROM role_permissions rp
-      JOIN role_hierarchy rh ON rp.role_id = rh.id
       "#,
     )
     .bind(role_id.into_inner())

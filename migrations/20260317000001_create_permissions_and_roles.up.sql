@@ -1,10 +1,9 @@
 -- Create roles table
--- Roles are dynamic, runtime-configurable, and can inherit from other roles.
+-- Roles are dynamic, runtime-configurable collections of permissions.
 create table roles (
     id uuid primary key default uuidv7(),
     name text not null unique,
     description text,
-    inherited_from_role_id uuid references roles(id) on delete set null,
     created_at timestamptz not null default now()
 );
 

@@ -7,13 +7,11 @@ pub type RoleId = Id<Role>;
 
 /// A role is a named set of permissions that can be assigned to users.
 /// Roles are stored in the database and can be created and modified at runtime.
-/// Roles can optionally inherit all permissions from another role.
 #[derive(Debug, Clone)]
 pub struct Role {
   pub id: RoleId,
   pub name: String,
   pub description: Option<String>,
-  pub inherited_from_role_id: Option<RoleId>,
   pub created_at: DateTime<Utc>,
 }
 

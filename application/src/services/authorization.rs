@@ -9,14 +9,13 @@ use domain::UserId;
 
 /// Service for checking whether a user has a specific permission in a given scope.
 ///
-/// Permission resolution works as follows:
-/// 1. All roles assigned to the user (via `user_roles`) are collected.
-/// 2. For each role, its permissions are resolved recursively via role inheritance.
-/// 3. A permission match is found if the permission code exists in any of those
-///    `role_permissions` entries where:
-///    - `scope_kind IS NULL` (global — applies everywhere), OR
-///    - `scope_kind = $scope_kind AND (scope_id = $scope_id OR scope_id IS NULL)`
-///      (scoped to this specific resource kind, or all resources of that kind)
+/// Permission resolution:
+/// - Roles are flat collections of permissions (no inheritance).
+/// - A user can hold multiple roles (`user_roles`).
+/// - Each `role_permissions` row ties a permission to a role with an optional scope:
+///   - `scope_kind IS NULL` → global (applies everywhere)
+///   - `scope_kind = "shop"`, `scope_id = <uuid>` → scoped to that specific resource
+///   - `scope_kind = "shop"`, `scope_id IS NULL` → all resources of that kind
 #[derive(Clone)]
 pub struct AuthorizationService {
   pool: PgPool,
@@ -27,27 +26,15 @@ impl AuthorizationService {
     Self { pool }
   }
 
-  /// Loads every global permission (scope_kind IS NULL) currently held by the
-  /// user, resolving role inheritance via a single recursive CTE.  Unknown
-  /// string codes in the DB (e.g. from a stale migration) are silently skipped.
+  /// Loads every global permission (`scope_kind IS NULL`) currently held by the user.
+  /// Unknown string codes in the DB (e.g. from a stale migration) are skipped with a warning.
   pub async fn load_global_permissions(&self, user_id: UserId) -> AppResult<HashSet<Permission>> {
     let codes: Vec<String> = sqlx::query_scalar(
       r#"
-      WITH RECURSIVE role_hierarchy AS (
-        SELECT ur.role_id AS id
-        FROM user_roles ur
-        WHERE ur.user_id = $1
-
-        UNION
-
-        SELECT r.inherited_from_role_id
-        FROM roles r
-        JOIN role_hierarchy rh ON r.id = rh.id
-        WHERE r.inherited_from_role_id IS NOT NULL
-      )
       SELECT DISTINCT rp.permission
-      FROM role_permissions rp
-      WHERE rp.role_id IN (SELECT id FROM role_hierarchy)
+      FROM user_roles ur
+      JOIN role_permissions rp ON rp.role_id = ur.role_id
+      WHERE ur.user_id = $1
         AND rp.scope_kind IS NULL
       "#,
     )
@@ -71,6 +58,8 @@ impl AuthorizationService {
   ///
   /// `scope` is `None` for a global check, or `Some((scope_kind, scope_id))` for a
   /// resource-scoped check (e.g. `Some(("shop", shop_uuid))`).
+  ///
+  /// A global entry (`scope_kind IS NULL`) satisfies any scoped check.
   pub async fn has_permission(
     &self,
     user_id: UserId,
@@ -79,24 +68,12 @@ impl AuthorizationService {
   ) -> AppResult<bool> {
     let count: i64 = match scope {
       None => {
-        // Global check: permission must have a NULL scope_kind entry.
         sqlx::query_scalar(
           r#"
-          WITH RECURSIVE role_hierarchy AS (
-            SELECT ur.role_id AS id
-            FROM user_roles ur
-            WHERE ur.user_id = $1
-
-            UNION
-
-            SELECT r.inherited_from_role_id
-            FROM roles r
-            JOIN role_hierarchy rh ON r.id = rh.id
-            WHERE r.inherited_from_role_id IS NOT NULL
-          )
           SELECT COUNT(*)
-          FROM role_permissions rp
-          WHERE rp.role_id IN (SELECT id FROM role_hierarchy)
+          FROM user_roles ur
+          JOIN role_permissions rp ON rp.role_id = ur.role_id
+          WHERE ur.user_id = $1
             AND rp.permission = $2
             AND rp.scope_kind IS NULL
           "#,
@@ -107,24 +84,12 @@ impl AuthorizationService {
         .await?
       }
       Some((scope_kind, scope_id)) => {
-        // Scoped check: a global entry (scope_kind IS NULL) also satisfies the check.
         sqlx::query_scalar(
           r#"
-          WITH RECURSIVE role_hierarchy AS (
-            SELECT ur.role_id AS id
-            FROM user_roles ur
-            WHERE ur.user_id = $1
-
-            UNION
-
-            SELECT r.inherited_from_role_id
-            FROM roles r
-            JOIN role_hierarchy rh ON r.id = rh.id
-            WHERE r.inherited_from_role_id IS NOT NULL
-          )
           SELECT COUNT(*)
-          FROM role_permissions rp
-          WHERE rp.role_id IN (SELECT id FROM role_hierarchy)
+          FROM user_roles ur
+          JOIN role_permissions rp ON rp.role_id = ur.role_id
+          WHERE ur.user_id = $1
             AND rp.permission = $2
             AND (
               rp.scope_kind IS NULL
@@ -159,8 +124,8 @@ impl AuthorizationService {
 
   /// Enforces that the user has the given permission in a specific resource scope.
   ///
-  /// A global version of the same permission (scope_kind IS NULL) also satisfies
-  /// this check, so admins with global access can act on any specific resource.
+  /// A global version of the same permission (`scope_kind IS NULL`) also satisfies
+  /// this check, so users with global access can act on any specific resource.
   pub async fn require_scoped(
     &self,
     user_id: UserId,

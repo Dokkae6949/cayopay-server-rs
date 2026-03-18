@@ -8,7 +8,6 @@ pub struct RoleRow {
   pub id: Uuid,
   pub name: String,
   pub description: Option<String>,
-  pub inherited_from_role_id: Option<Uuid>,
   pub created_at: DateTime<Utc>,
 }
 
@@ -16,7 +15,6 @@ pub struct RoleRow {
 pub struct RoleCreation {
   pub name: String,
   pub description: Option<String>,
-  pub inherited_from_role_id: Option<RoleId>,
 }
 
 /// DB row for `role_permissions`.
@@ -59,7 +57,6 @@ impl From<RoleRow> for Role {
       id: value.id.into(),
       name: value.name,
       description: value.description,
-      inherited_from_role_id: value.inherited_from_role_id.map(Into::into),
       created_at: value.created_at,
     }
   }
