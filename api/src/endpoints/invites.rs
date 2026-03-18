@@ -1,6 +1,6 @@
 use crate::{
   error::AppResult,
-  extractor::{Authn, ValidatedJson},
+  extractor::{Auth, ValidatedJson},
   models::{AcceptInviteRequest, InviteRequest, InviteResponse},
 };
 use application::{error::AppError, services::auth, state::AppState};
@@ -33,10 +33,10 @@ use uuid::Uuid;
 )]
 pub async fn create_invite(
   State(state): State<AppState>,
-  authn: Authn,
+  auth: Auth,
   ValidatedJson(payload): ValidatedJson<InviteRequest>,
 ) -> AppResult<()> {
-  state.authz_service.require(authn.id, Permission::SendInvite).await?;
+  auth.require(Permission::SendInvite)?;
 
   if RoleStore::find_by_name(&state.pool, &payload.role).await.map_err(AppError::from)?.is_none() {
     return Err(AppError::BadRequest(format!("Role '{}' does not exist", payload.role)).into());
@@ -52,18 +52,18 @@ pub async fn create_invite(
     }
   }
 
-  let inviter_name = UserStore::find_by_id(&state.pool, &authn.id)
+  let inviter_name = UserStore::find_by_id(&state.pool, &auth.id)
     .await
     .map_err(AppError::from)?
     .map(|u| format!("{} {}", u.first_name, u.last_name))
-    .ok_or(AppError::InvitorMissing(authn.id))?;
+    .ok_or(AppError::InvitorMissing(auth.id))?;
 
   let token = Uuid::new_v4().to_string();
 
   InviteStore::create(
     &state.pool,
     &InviteCreation {
-      invitor: authn.id,
+      invitor: auth.id,
       email: email.clone(),
       token: token.clone(),
       role: payload.role,
@@ -93,9 +93,9 @@ pub async fn create_invite(
 #[axum::debug_handler]
 pub async fn get_invites(
   State(state): State<AppState>,
-  authn: Authn,
+  auth: Auth,
 ) -> AppResult<Json<Vec<InviteResponse>>> {
-  state.authz_service.require(authn.id, Permission::ViewInvite).await?;
+  auth.require(Permission::ViewInvite)?;
   let invites = InviteStore::list_all(&state.pool).await.map_err(AppError::from)?;
   Ok(Json(invites.into_iter().map(InviteResponse::from).collect()))
 }

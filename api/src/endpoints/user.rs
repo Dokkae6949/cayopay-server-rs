@@ -1,4 +1,4 @@
-use crate::{error::AppResult, extractor::Authn, models::UserResponse};
+use crate::{error::AppResult, extractor::Auth, models::UserResponse};
 use application::{error::AppError, state::AppState};
 use axum::{extract::State, routing::get, Json, Router};
 use domain::models::permission::Permission;
@@ -16,9 +16,9 @@ use infra::stores::UserStore;
 )]
 pub async fn list_users(
   State(state): State<AppState>,
-  authn: Authn,
+  auth: Auth,
 ) -> AppResult<Json<Vec<UserResponse>>> {
-  state.authz_service.require(authn.id, Permission::ReadUser).await?;
+  auth.require(Permission::ReadUser)?;
   let users = UserStore::list_all(&state.pool).await.map_err(AppError::from)?;
   Ok(Json(users.into_iter().map(Into::into).collect()))
 }

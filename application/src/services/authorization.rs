@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -23,6 +25,46 @@ pub struct AuthorizationService {
 impl AuthorizationService {
   pub fn new(pool: PgPool) -> Self {
     Self { pool }
+  }
+
+  /// Loads every global permission (scope_kind IS NULL) currently held by the
+  /// user, resolving role inheritance via a single recursive CTE.  Unknown
+  /// string codes in the DB (e.g. from a stale migration) are silently skipped.
+  pub async fn load_global_permissions(&self, user_id: UserId) -> AppResult<HashSet<Permission>> {
+    let codes: Vec<String> = sqlx::query_scalar(
+      r#"
+      WITH RECURSIVE role_hierarchy AS (
+        SELECT ur.role_id AS id
+        FROM user_roles ur
+        WHERE ur.user_id = $1
+
+        UNION
+
+        SELECT r.inherited_from_role_id
+        FROM roles r
+        JOIN role_hierarchy rh ON r.id = rh.id
+        WHERE r.inherited_from_role_id IS NOT NULL
+      )
+      SELECT DISTINCT rp.permission
+      FROM role_permissions rp
+      WHERE rp.role_id IN (SELECT id FROM role_hierarchy)
+        AND rp.scope_kind IS NULL
+      "#,
+    )
+    .bind(user_id.into_inner())
+    .fetch_all(&self.pool)
+    .await?;
+
+    Ok(codes
+      .iter()
+      .filter_map(|c| {
+        let p = Permission::from_code(c);
+        if p.is_none() {
+          tracing::warn!(code = %c, "Skipping unknown permission code from DB (stale migration?)");
+        }
+        p
+      })
+      .collect())
   }
 
   /// Returns `true` if the user has the given permission.

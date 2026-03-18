@@ -1,4 +1,4 @@
-use crate::{error::AppResult, extractor::Authn, models::GuestResponse};
+use crate::{error::AppResult, extractor::Auth, models::GuestResponse};
 use application::{error::AppError, state::AppState};
 use axum::{extract::State, routing::get, Json, Router};
 use domain::models::permission::Permission;
@@ -15,9 +15,9 @@ use infra::stores::GuestStore;
 )]
 pub async fn list_guests(
   State(state): State<AppState>,
-  authn: Authn,
+  auth: Auth,
 ) -> AppResult<Json<Vec<GuestResponse>>> {
-  state.authz_service.require(authn.id, Permission::ReadGuest).await?;
+  auth.require(Permission::ReadGuest)?;
   let guests = GuestStore::list_all(&state.pool).await.map_err(AppError::from)?;
   Ok(Json(guests.into_iter().map(Into::into).collect()))
 }
