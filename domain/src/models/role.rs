@@ -1,137 +1,52 @@
-use serde::{Deserialize, Serialize};
-use std::fmt::Display;
-use utoipa::ToSchema;
+use chrono::{DateTime, Utc};
+use uuid::Uuid;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize, ToSchema)]
-pub enum Permission {
-  ConfigureSettings,
+use crate::{models::permission::Permission, Id, UserId};
 
-  SendInvite,
-  ViewInvite,
+pub type RoleId = Id<Role>;
 
-  RemoveUser,
-  ReadUserDetails,
-
-  RemoveGuest,
-  ReadGuestDetails,
+/// A role is a named set of permissions that can be assigned to users.
+/// Roles are stored in the database and can be created and modified at runtime.
+#[derive(Debug, Clone)]
+pub struct Role {
+  pub id: RoleId,
+  pub name: String,
+  pub description: Option<String>,
+  pub created_at: DateTime<Utc>,
 }
 
-#[derive(
-  Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, ToSchema,
-)]
-#[sqlx(type_name = "text", rename_all = "lowercase")]
-#[serde(rename_all = "lowercase")]
-pub enum Role {
-  #[default]
-  Undefined,
+pub type RolePermissionId = Id<RolePermission>;
 
-  Owner,
-  Admin,
+/// Links a role to a code-defined [`Permission`] with an optional resource scope.
+///
+/// - When `scope_kind` is `None` the permission applies globally with no resource restriction.
+/// - When `scope_kind` is `Some("shop")` and `scope_id` is `Some(uuid)`, the permission
+///   applies only to that specific shop.
+/// - When `scope_kind` is `Some("shop")` and `scope_id` is `None`, the permission applies
+///   to all shops.
+///
+/// This enables checks like: "can user `manage:inventory` **in shop:123**?"
+#[derive(Debug, Clone)]
+pub struct RolePermission {
+  pub id: RolePermissionId,
+  pub role_id: RoleId,
+  /// The code-defined permission granted by this entry.
+  pub permission: Permission,
+  /// Resource kind this permission is scoped to: `"shop"`, `"register"`, `"event"`, etc.
+  /// `None` means the permission applies globally.
+  pub scope_kind: Option<String>,
+  /// The specific resource UUID. `None` means all resources of `scope_kind`.
+  pub scope_id: Option<Uuid>,
+  pub created_at: DateTime<Utc>,
 }
 
-impl Display for Role {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let s = match self {
-      Role::Owner => "owner",
-      Role::Admin => "admin",
-      Role::Undefined => "undefined",
-    };
-    write!(f, "{}", s)
-  }
-}
+pub type UserRoleId = Id<UserRole>;
 
-impl From<String> for Role {
-  fn from(s: String) -> Self {
-    match s.as_str() {
-      "owner" => Role::Owner,
-      "admin" => Role::Admin,
-      _ => Role::Undefined,
-    }
-  }
-}
-
-impl Role {
-  pub fn permissions(&self) -> Vec<Permission> {
-    match self {
-      Role::Owner => vec![
-        Permission::ConfigureSettings,
-        Permission::SendInvite,
-        Permission::ViewInvite,
-        Permission::RemoveUser,
-        Permission::ReadUserDetails,
-        Permission::RemoveGuest,
-        Permission::ReadGuestDetails,
-      ],
-      Role::Admin => vec![
-        Permission::SendInvite,
-        Permission::ViewInvite,
-        Permission::RemoveUser,
-        Permission::ReadUserDetails,
-        Permission::RemoveGuest,
-        Permission::ReadGuestDetails,
-      ],
-      Role::Undefined => vec![],
-    }
-  }
-
-  pub fn has_permission(&self, perm: Permission) -> bool {
-    self.permissions().contains(&perm)
-  }
-
-  pub fn can_assign_role(&self, target_role: Role) -> bool {
-    match self {
-      Role::Owner => matches!(target_role, Role::Owner | Role::Admin),
-      Role::Admin => matches!(target_role, Role::Admin),
-      Role::Undefined => false,
-    }
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn test_role_permissions() {
-    let owner_perms = Role::Owner.permissions();
-    assert!(owner_perms.contains(&Permission::ConfigureSettings));
-    assert!(owner_perms.contains(&Permission::SendInvite));
-
-    let admin_perms = Role::Admin.permissions();
-    assert!(!admin_perms.contains(&Permission::ConfigureSettings));
-    assert!(admin_perms.contains(&Permission::SendInvite));
-
-    let undefined_perms = Role::Undefined.permissions();
-    assert!(undefined_perms.is_empty());
-  }
-
-  #[test]
-  fn test_has_permission() {
-    assert!(Role::Owner.has_permission(Permission::ConfigureSettings));
-    assert!(Role::Owner.has_permission(Permission::SendInvite));
-
-    assert!(!Role::Admin.has_permission(Permission::ConfigureSettings));
-    assert!(Role::Admin.has_permission(Permission::SendInvite));
-
-    assert!(!Role::Undefined.has_permission(Permission::ConfigureSettings));
-    assert!(!Role::Undefined.has_permission(Permission::SendInvite));
-  }
-
-  #[test]
-  fn test_can_assign_role() {
-    // Owner can assign Owner and Admin
-    assert!(Role::Owner.can_assign_role(Role::Owner));
-    assert!(Role::Owner.can_assign_role(Role::Admin));
-    assert!(!Role::Owner.can_assign_role(Role::Undefined));
-
-    // Admin can assign Admin only
-    assert!(!Role::Admin.can_assign_role(Role::Owner));
-    assert!(Role::Admin.can_assign_role(Role::Admin));
-    assert!(!Role::Admin.can_assign_role(Role::Undefined));
-
-    // Undefined can assign nothing
-    assert!(!Role::Undefined.can_assign_role(Role::Owner));
-    assert!(!Role::Undefined.can_assign_role(Role::Admin));
-    assert!(!Role::Undefined.can_assign_role(Role::Undefined));
-  }
+/// Links a user to a role, granting all permissions attached to that role.
+#[derive(Debug, Clone)]
+pub struct UserRole {
+  pub id: UserRoleId,
+  pub user_id: UserId,
+  pub role_id: RoleId,
+  pub created_at: DateTime<Utc>,
 }

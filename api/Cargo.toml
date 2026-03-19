@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 domain = { path = "../domain" }
 application = { path = "../application" }
+infra = { path = "../infra" }
 
 # Web Framework
 axum = { version = "0.7", features = ["macros"] }

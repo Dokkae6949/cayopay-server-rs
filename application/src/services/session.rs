@@ -1,56 +1,20 @@
-use chrono::Duration;
-use infra::stores::{models::SessionCreation, SessionStore};
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use crate::error::AppResult;
-use domain::{Session, UserId};
+use domain::User;
+use infra::stores::{SessionStore, UserStore};
 
-#[derive(Clone)]
-pub struct SessionService {
-  pool: PgPool,
-  expiration_days: i64,
-}
+/// Validates a session token and returns the owning user, or `None` if the
+/// session is missing or expired.
+pub async fn authenticate(pool: &PgPool, token: &str) -> AppResult<Option<User>> {
+  let Some(session) = SessionStore::find_by_token(pool, token).await? else {
+    return Ok(None);
+  };
 
-impl SessionService {
-  pub fn new(pool: PgPool, expiration_days: i64) -> Self {
-    Self {
-      pool,
-      expiration_days,
-    }
+  if session.is_expired() {
+    SessionStore::delete_by_token(pool, token).await?;
+    return Ok(None);
   }
 
-  pub async fn create_session(&self, user_id: UserId) -> AppResult<Session> {
-    let token = Uuid::new_v4().to_string();
-
-    let new_session = SessionCreation {
-      user_id: user_id.into(),
-      token,
-      user_agent: None,
-      ip_address: None,
-      expires_in: Duration::days(self.expiration_days),
-    };
-
-    let session = SessionStore::create(&self.pool, &new_session).await?;
-
-    Ok(session)
-  }
-
-  pub async fn get_session(&self, token: &str) -> AppResult<Option<Session>> {
-    let session = SessionStore::find_by_token(&self.pool, token).await?;
-
-    if let Some(ref s) = session {
-      if s.is_expired() {
-        SessionStore::delete_by_token(&self.pool, token).await?;
-        return Ok(None);
-      }
-    }
-
-    Ok(session)
-  }
-
-  pub async fn end_session(&self, token: &str) -> AppResult<()> {
-    SessionStore::delete_by_token(&self.pool, token).await?;
-    Ok(())
-  }
+  Ok(UserStore::find_by_id(pool, &session.user_id).await?)
 }

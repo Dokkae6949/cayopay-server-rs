@@ -1,6 +1,7 @@
 pub mod actor;
 pub mod guest;
 pub mod invite;
+pub mod permission;
 pub mod role;
 pub mod session;
 pub mod shop;
@@ -11,7 +12,8 @@ pub mod wallet;
 pub use actor::{Actor, ActorId};
 pub use guest::{Guest, GuestId};
 pub use invite::{Invite, InviteId, InviteStatus};
-pub use role::{Permission, Role};
+pub use permission::Permission;
+pub use role::{Role, RoleId, RolePermission, RolePermissionId, UserRole, UserRoleId};
 pub use session::{Session, SessionId};
 pub use shop::{Shop, ShopId, ShopMember, ShopMemberId, ShopOffering, ShopOfferingId};
 pub use transaction::{Transaction, TransactionId};

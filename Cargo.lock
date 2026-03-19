@@ -54,6 +54,7 @@ dependencies = [
  "axum-extra",
  "chrono",
  "domain",
+ "infra",
  "serde",
  "serde_json",
  "time",

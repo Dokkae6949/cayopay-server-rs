@@ -1,5 +1,5 @@
 use chrono::{DateTime, Duration, Utc};
-use domain::{invite::InviteStatus, Email, Invite, Role, UserId};
+use domain::{invite::InviteStatus, Email, Invite, UserId};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
@@ -21,7 +21,7 @@ pub struct InviteCreation {
   pub invitor: UserId,
   pub email: Email,
   pub token: String,
-  pub role: Role,
+  pub role: String,
   pub expires_in: Duration,
 }
 
@@ -37,7 +37,7 @@ impl From<InviteRow> for Invite {
       invitor: value.invitor_user_id.into(),
       email: value.email.into(),
       token: value.token,
-      role: value.role.into(),
+      role: value.role,
       status: value.status.as_str().into(),
       expires_in: value.expires_at - value.created_at,
       created_at: value.created_at,

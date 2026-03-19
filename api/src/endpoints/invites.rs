@@ -1,16 +1,21 @@
 use crate::{
   error::AppResult,
-  extractor::{Authz, ValidatedJson},
+  extractor::{Auth, ValidatedJson},
   models::{AcceptInviteRequest, InviteRequest, InviteResponse},
 };
-use application::state::AppState;
+use application::{error::AppError, services::auth, state::AppState};
 use axum::{
   extract::{Path, State},
-  http::Request,
   routing::{get, post},
   Json, Router,
 };
-use domain::{Email, Permission, RawPassword};
+use chrono::Duration;
+use domain::{models::permission::Permission, Email, RawPassword};
+use infra::stores::{
+  models::{InviteCreation, UserRoleCreation},
+  InviteStore, RoleStore, UserRoleStore, UserStore,
+};
+use uuid::Uuid;
 
 #[utoipa::path(
   post,
@@ -28,19 +33,47 @@ use domain::{Email, Permission, RawPassword};
 )]
 pub async fn create_invite(
   State(state): State<AppState>,
-  authz: Authz,
+  auth: Auth,
   ValidatedJson(payload): ValidatedJson<InviteRequest>,
 ) -> AppResult<()> {
-  authz.require(Permission::SendInvite)?;
-  authz.can_assign(payload.role)?;
+  auth.require(Permission::SendInvite)?;
+
+  if RoleStore::find_by_name(&state.pool, &payload.role).await.map_err(AppError::from)?.is_none() {
+    return Err(AppError::BadRequest(format!("Role '{}' does not exist", payload.role)).into());
+  }
 
   let email = Email::new(payload.email);
-  let user = authz.0;
 
-  state
-    .invite_service
-    .create_invite(user.id, email, payload.role)
-    .await?;
+  if let Some(invite) = InviteStore::find_by_email(&state.pool, &email).await.map_err(AppError::from)? {
+    if invite.is_expired() {
+      InviteStore::delete_by_id(&state.pool, &invite.id).await.map_err(AppError::from)?;
+    } else {
+      return Err(AppError::InviteAlreadySent.into());
+    }
+  }
+
+  let inviter_name = UserStore::find_by_id(&state.pool, &auth.id)
+    .await
+    .map_err(AppError::from)?
+    .map(|u| format!("{} {}", u.first_name, u.last_name))
+    .ok_or(AppError::InvitorMissing(auth.id))?;
+
+  let token = Uuid::new_v4().to_string();
+
+  InviteStore::create(
+    &state.pool,
+    &InviteCreation {
+      invitor: auth.id,
+      email: email.clone(),
+      token: token.clone(),
+      role: payload.role,
+      expires_in: Duration::days(7),
+    },
+  )
+  .await
+  .map_err(AppError::from)?;
+
+  state.email_service.send_invite(&email, &token, &inviter_name).await.map_err(AppError::from)?;
 
   Ok(())
 }
@@ -60,18 +93,11 @@ pub async fn create_invite(
 #[axum::debug_handler]
 pub async fn get_invites(
   State(state): State<AppState>,
-  authz: Authz,
+  auth: Auth,
 ) -> AppResult<Json<Vec<InviteResponse>>> {
-  authz.require(Permission::ViewInvite)?;
-
-  // Get list of invites
-  let invites = state.invite_service.get_all().await?;
-  let response = invites
-    .into_iter()
-    .map(InviteResponse::from)
-    .collect::<Vec<InviteResponse>>();
-
-  Ok(Json(response))
+  auth.require(Permission::ViewInvite)?;
+  let invites = InviteStore::list_all(&state.pool).await.map_err(AppError::from)?;
+  Ok(Json(invites.into_iter().map(InviteResponse::from).collect()))
 }
 
 #[utoipa::path(
@@ -92,15 +118,43 @@ pub async fn accept_invite(
   Path(token): Path<String>,
   ValidatedJson(payload): ValidatedJson<AcceptInviteRequest>,
 ) -> AppResult<()> {
-  state
-    .invite_service
-    .accept_invite(
-      &token,
-      RawPassword::new(payload.password),
-      payload.first_name,
-      payload.last_name,
-    )
-    .await?;
+  let invite = InviteStore::find_by_token(&state.pool, &token)
+    .await
+    .map_err(AppError::from)?
+    .ok_or(AppError::NotFound)?;
+
+  if invite.is_expired() {
+    return Err(AppError::InviteExpired.into());
+  }
+
+  let user = auth::register(
+    &state.pool,
+    invite.email.clone(),
+    RawPassword::new(payload.password),
+    payload.first_name,
+    payload.last_name,
+  )
+  .await?;
+
+  let role = RoleStore::find_by_name(&state.pool, &invite.role)
+    .await
+    .map_err(AppError::from)?
+    .ok_or_else(|| AppError::BadRequest(format!(
+      "The role '{}' no longer exists; the invite must be re-issued",
+      invite.role
+    )))?;
+
+  UserRoleStore::assign(
+    &state.pool,
+    &UserRoleCreation {
+      user_id: user.id,
+      role_id: role.id,
+    },
+  )
+  .await
+  .map_err(AppError::from)?;
+
+  InviteStore::delete_by_id(&state.pool, &invite.id).await.map_err(AppError::from)?;
 
   Ok(())
 }

@@ -4,7 +4,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{Email, Id, Role, UserId};
+use crate::{Email, Id, UserId};
 
 pub type InviteId = Id<Invite>;
 
@@ -24,7 +24,8 @@ pub struct Invite {
   pub invitor: UserId,
   pub email: Email,
   pub token: String,
-  pub role: Role,
+  /// Name of the role to assign to the invited user upon acceptance.
+  pub role: String,
   pub status: InviteStatus,
   pub expires_in: Duration,
   pub created_at: DateTime<Utc>,

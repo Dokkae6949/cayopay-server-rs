@@ -48,6 +48,11 @@ impl IntoResponse for ApiError {
         None,
       ),
       AppError::Authorization => (StatusCode::FORBIDDEN, "Permission denied".to_string(), None),
+      AppError::PermissionDenied { permission, scope } => (
+        StatusCode::FORBIDDEN,
+        format!("Permission denied: requires '{permission}' in scope '{scope}'"),
+        None,
+      ),
       AppError::UserAlreadyExists => (
         StatusCode::CONFLICT,
         "User already exists".to_string(),

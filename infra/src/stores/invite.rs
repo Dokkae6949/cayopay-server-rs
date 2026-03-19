@@ -10,19 +10,18 @@ impl InviteStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      InviteRow,
+    let row = sqlx::query_as::<_, InviteRow>(
       r#"
       INSERT INTO invites (invitor_user_id, email, token, role, expires_at)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING id, invitor_user_id, email, token, role, status, expires_at, created_at, updated_at
       "#,
-      creation.invitor.into_inner(),
-      creation.email.expose(),
-      creation.token,
-      creation.role.to_string(),
-      chrono::Utc::now() + creation.expires_in,
     )
+    .bind(creation.invitor.into_inner())
+    .bind(creation.email.expose())
+    .bind(&creation.token)
+    .bind(&creation.role)
+    .bind(chrono::Utc::now() + creation.expires_in)
     .fetch_one(executor)
     .await?;
 
@@ -37,17 +36,16 @@ impl InviteStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      InviteRow,
+    let row = sqlx::query_as::<_, InviteRow>(
       r#"
       UPDATE invites
       SET status = COALESCE($2, status)
       WHERE id = $1
       RETURNING id, invitor_user_id, email, token, role, status, expires_at, created_at, updated_at
       "#,
-      id.into_inner(),
-      update.status.as_ref().map(ToString::to_string)
     )
+    .bind(id.into_inner())
+    .bind(update.status.as_ref().map(ToString::to_string))
     .fetch_optional(executor)
     .await?;
 
@@ -58,15 +56,10 @@ impl InviteStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    sqlx::query!(
-      r#"
-      DELETE FROM invites
-      WHERE id = $1
-      "#,
-      id.into_inner(),
-    )
-    .execute(executor)
-    .await?;
+    sqlx::query("DELETE FROM invites WHERE id = $1")
+      .bind(id.into_inner())
+      .execute(executor)
+      .await?;
 
     Ok(())
   }
@@ -75,15 +68,14 @@ impl InviteStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      InviteRow,
+    let row = sqlx::query_as::<_, InviteRow>(
       r#"
       SELECT id, invitor_user_id, email, token, role, status, expires_at, created_at, updated_at
       FROM invites
       WHERE token = $1
       "#,
-      token,
     )
+    .bind(token)
     .fetch_optional(executor)
     .await?;
 
@@ -97,15 +89,14 @@ impl InviteStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      InviteRow,
+    let row = sqlx::query_as::<_, InviteRow>(
       r#"
       SELECT id, invitor_user_id, email, token, role, status, expires_at, created_at, updated_at
       FROM invites
       WHERE email = $1
       "#,
-      email.expose(),
     )
+    .bind(email.expose())
     .fetch_optional(executor)
     .await?;
 
@@ -116,12 +107,11 @@ impl InviteStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let rows = sqlx::query_as!(
-      InviteRow,
+    let rows = sqlx::query_as::<_, InviteRow>(
       r#"
       SELECT id, invitor_user_id, email, token, role, status, expires_at, created_at, updated_at
       FROM invites
-      "#
+      "#,
     )
     .fetch_all(executor)
     .await?;

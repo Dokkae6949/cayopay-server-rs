@@ -1,5 +1,5 @@
-use application::{config::Config, state::AppState};
-use domain::{wallet::WalletLabel, Role};
+use application::{config::Config, services::auth, state::AppState};
+use domain::wallet::WalletLabel;
 use infra::stores::{models::WalletCreation, WalletStore};
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
@@ -86,16 +86,14 @@ async fn shutdown_signal() {
 }
 
 async fn seed_owner(state: &AppState) -> Result<(), Box<dyn std::error::Error>> {
-  match state
-    .auth_service
-    .register(
-      state.config.owner_email.clone(),
-      state.config.owner_password.clone(),
-      state.config.owner_first_name.clone(),
-      state.config.owner_last_name.clone(),
-      Role::Owner,
-    )
-    .await
+  match auth::register(
+    &state.pool,
+    state.config.owner_email.clone(),
+    state.config.owner_password.clone(),
+    state.config.owner_first_name.clone(),
+    state.config.owner_last_name.clone(),
+  )
+  .await
   {
     Ok(_) => tracing::info!("Seeded default owner user"),
     Err(application::error::AppError::UserAlreadyExists) => {

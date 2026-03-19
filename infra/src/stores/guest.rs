@@ -10,17 +10,16 @@ impl GuestStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      GuestRow,
+    let row = sqlx::query_as::<_, GuestRow>(
       r#"
       INSERT INTO guests (actor_id, email, verified)
       VALUES ($1, $2, $3)
       RETURNING id, actor_id, email, verified, created_at, updated_at
       "#,
-      creation.actor_id.into_inner(),
-      creation.email.expose(),
-      creation.verified,
     )
+    .bind(creation.actor_id.into_inner())
+    .bind(creation.email.expose())
+    .bind(creation.verified)
     .fetch_one(executor)
     .await?;
 
@@ -35,8 +34,7 @@ impl GuestStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      GuestRow,
+    let row = sqlx::query_as::<_, GuestRow>(
       r#"
       UPDATE guests
       SET email = COALESCE($2, email),
@@ -44,10 +42,10 @@ impl GuestStore {
       WHERE id = $1
       RETURNING id, actor_id, email, verified, created_at, updated_at
       "#,
-      id.into_inner(),
-      update.email.as_ref().map(|e| e.expose()),
-      update.verified,
     )
+    .bind(id.into_inner())
+    .bind(update.email.as_ref().map(|e| e.expose()))
+    .bind(update.verified)
     .fetch_one(executor)
     .await?;
 
@@ -58,15 +56,14 @@ impl GuestStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      GuestRow,
+    let row = sqlx::query_as::<_, GuestRow>(
       r#"
       SELECT id, actor_id, email, verified, created_at, updated_at
       FROM guests
       WHERE id = $1
       "#,
-      id.into_inner(),
     )
+    .bind(id.into_inner())
     .fetch_optional(executor)
     .await?;
 
@@ -80,15 +77,14 @@ impl GuestStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let row = sqlx::query_as!(
-      GuestRow,
+    let row = sqlx::query_as::<_, GuestRow>(
       r#"
       SELECT id, actor_id, email, verified, created_at, updated_at
       FROM guests
       WHERE actor_id = $1
       "#,
-      actor_id.into_inner(),
     )
+    .bind(actor_id.into_inner())
     .fetch_optional(executor)
     .await?;
 
@@ -99,12 +95,11 @@ impl GuestStore {
   where
     E: Executor<'c, Database = Postgres>,
   {
-    let rows = sqlx::query_as!(
-      GuestRow,
+    let rows = sqlx::query_as::<_, GuestRow>(
       r#"
       SELECT id, actor_id, email, verified, created_at, updated_at
       FROM guests
-      "#
+      "#,
     )
     .fetch_all(executor)
     .await?;
