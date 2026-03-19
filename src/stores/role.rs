@@ -110,13 +110,13 @@ impl RolePermissionStore {
       "#,
     )
     .bind(creation.role_id.into_inner())
-    .bind(creation.permission.as_str())
+    .bind(&creation.permission)
     .bind(creation.scope_kind.as_deref())
     .bind(creation.scope_id)
     .fetch_one(executor)
     .await?;
 
-    row.try_into().map_err(|e: String| sqlx::Error::Decode(e.into()))
+    Ok(row.into())
   }
 
   pub async fn remove<'c, E>(executor: E, id: &RolePermissionId) -> Result<(), sqlx::Error>
@@ -152,7 +152,7 @@ impl RolePermissionStore {
 
     rows
       .into_iter()
-      .map(|r| r.try_into().map_err(|e: String| sqlx::Error::Decode(e.into())))
+      .map(|r| Ok(r.into()))
       .collect()
   }
 }

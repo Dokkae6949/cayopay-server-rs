@@ -1,57 +1,55 @@
-use std::collections::HashSet;
 use std::ops::Deref;
 
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts, RequestPartsExt};
 use axum_extra::extract::CookieJar;
-use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
-use crate::models::{permission::Permission, User};
+use crate::models::{Resource, ShopId, User};
 use crate::services::{authorization::AuthorizationService, session};
 use crate::state::AppState;
 
-const GLOBAL_SCOPE: &str = "global";
-
 /// Combined authentication + authorisation extractor.
 ///
-/// Pulling `Auth` from a handler extracts the authenticated caller *and*
-/// pre-loads their full set of global permissions in a single DB round-trip,
-/// so handlers can call the synchronous [`Auth::require`] instead of wiring
-/// `authz_service` + `user_id` through every call-site.
-pub struct Auth {
+/// Extracting `Authz` from a handler authenticates the caller from the session
+/// cookie and provides async permission-checking methods that query the
+/// `granted_permissions` table on demand.
+///
+/// # Usage
+/// ```rust,ignore
+/// async fn my_handler(authz: Authz) -> AppResult<()> {
+///     authz.require_global("settings.configure").await?;
+///     authz.require_shop("product.create", Some(shop_id)).await?;
+///     // authz also derefs to the authenticated User
+///     println!("{}", authz.first_name);
+///     Ok(())
+/// }
+/// ```
+pub struct Authz {
   pub user: User,
-  permissions: HashSet<Permission>,
   authz: AuthorizationService,
 }
 
-impl Auth {
-  /// Enforces that the caller holds the given global permission.
-  pub fn require(&self, permission: Permission) -> AppResult<()> {
-    if self.permissions.contains(&permission) {
-      Ok(())
-    } else {
-      Err(AppError::PermissionDenied {
-        permission: permission.to_string(),
-        scope: GLOBAL_SCOPE.to_string(),
-      })
-    }
+impl Authz {
+  /// Enforces a **global** permission (no resource context).
+  pub async fn require_global(&self, permission: &str) -> AppResult<()> {
+    self.authz.require_global(self.user.id, permission).await
   }
 
-  /// Enforces that the caller holds the given permission scoped to a specific resource.
-  pub async fn require_scoped(
-    &self,
-    permission: Permission,
-    scope_kind: &str,
-    scope_id: Uuid,
-  ) -> AppResult<()> {
-    self
-      .authz
-      .require_scoped(self.user.id, permission, scope_kind, scope_id)
-      .await
+  /// Enforces a permission for the given [`Resource`] context.
+  pub async fn require_resource(&self, permission: &str, resource: Resource) -> AppResult<()> {
+    self.authz.require_resource(self.user.id, permission, resource).await
+  }
+
+  /// Convenience: enforces a shop-scoped permission.
+  ///
+  /// - `shop_id = Some(id)` – checks for that specific shop (wildcard also satisfies).
+  /// - `shop_id = None`     – checks for an "any shop" wildcard grant.
+  pub async fn require_shop(&self, permission: &str, shop_id: Option<ShopId>) -> AppResult<()> {
+    self.authz.require_shop(self.user.id, permission, shop_id).await
   }
 }
 
-impl Deref for Auth {
+impl Deref for Authz {
   type Target = User;
 
   fn deref(&self) -> &Self::Target {
@@ -60,7 +58,7 @@ impl Deref for Auth {
 }
 
 #[async_trait]
-impl FromRequestParts<AppState> for Auth {
+impl FromRequestParts<AppState> for Authz {
   type Rejection = AppError;
 
   async fn from_request_parts(
@@ -82,14 +80,8 @@ impl FromRequestParts<AppState> for Auth {
       .await?
       .ok_or(AppError::Authentication)?;
 
-    let permissions = state
-      .authz_service
-      .load_global_permissions(user.id)
-      .await?;
-
-    Ok(Auth {
+    Ok(Authz {
       user,
-      permissions,
       authz: state.authz_service.clone(),
     })
   }
