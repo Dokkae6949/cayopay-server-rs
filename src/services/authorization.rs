@@ -1,20 +1,22 @@
-use std::collections::HashSet;
-
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
-use crate::models::{permission::Permission, UserId};
+use crate::models::permission::Resource;
+use crate::models::UserId;
 
-/// Service for checking whether a user has a specific permission in a given scope.
+/// Service for checking whether a user has been directly granted a permission.
 ///
-/// Permission resolution:
-/// - Roles are flat collections of permissions (no inheritance).
-/// - A user can hold multiple roles (`user_roles`).
-/// - Each `role_permissions` row ties a permission to a role with an optional scope:
-///   - `scope_kind IS NULL` → global (applies everywhere)
-///   - `scope_kind = "shop"`, `scope_id = <uuid>` → scoped to that specific resource
-///   - `scope_kind = "shop"`, `scope_id IS NULL` → all resources of that kind
+/// Permission resolution uses the `granted_permissions` table:
+///
+/// ```text
+/// granted_permissions (user_id, resource_type, resource_id, permission)
+/// ```
+///
+/// - `resource_type = 'global'`, `resource_id IS NULL` → system-wide permission.
+/// - `resource_type = 'shop'`,   `resource_id IS NULL` → permission on *any* shop.
+/// - `resource_type = 'shop'`,   `resource_id = <uuid>` → permission on that specific shop.
+///
+/// There is no role inheritance; each row is a direct grant.
 #[derive(Clone)]
 pub struct AuthorizationService {
   pool: PgPool,
@@ -25,81 +27,54 @@ impl AuthorizationService {
     Self { pool }
   }
 
-  /// Loads every global permission (`scope_kind IS NULL`) currently held by the user.
-  /// Unknown string codes in the DB (e.g. from a stale migration) are skipped with a warning.
-  pub async fn load_global_permissions(&self, user_id: UserId) -> AppResult<HashSet<Permission>> {
-    let codes: Vec<String> = sqlx::query_scalar(
-      r#"
-      SELECT DISTINCT rp.permission
-      FROM user_roles ur
-      JOIN role_permissions rp ON rp.role_id = ur.role_id
-      WHERE ur.user_id = $1
-        AND rp.scope_kind IS NULL
-      "#,
-    )
-    .bind(user_id.into_inner())
-    .fetch_all(&self.pool)
-    .await?;
-
-    Ok(codes
-      .iter()
-      .filter_map(|c| {
-        let p = Permission::from_code(c);
-        if p.is_none() {
-          tracing::warn!(code = %c, "Skipping unknown permission code from DB (stale migration?)");
-        }
-        p
-      })
-      .collect())
-  }
-
-  /// Returns `true` if the user has the given permission.
+  /// Returns `true` if the user holds the permission for the given resource context.
   ///
-  /// `scope` is `None` for a global check, or `Some((scope_kind, scope_id))` for a
-  /// resource-scoped check (e.g. `Some(("shop", shop_uuid))`).
-  ///
-  /// A global entry (`scope_kind IS NULL`) satisfies any scoped check.
+  /// For a `Shop(Some(id))` check, a wildcard grant (`resource_id IS NULL`)
+  /// also satisfies the check.
   pub async fn has_permission(
     &self,
     user_id: UserId,
-    permission: Permission,
-    scope: Option<(&str, Uuid)>,
+    permission: &str,
+    resource: &Resource,
   ) -> AppResult<bool> {
-    let count: i64 = match scope {
+    let resource_type = resource.resource_type();
+    let resource_id = resource.resource_id();
+
+    let count: i64 = match resource_id {
       None => {
+        // Global check OR "any resource" wildcard check: exact NULL match.
         sqlx::query_scalar(
           r#"
           SELECT COUNT(*)
-          FROM user_roles ur
-          JOIN role_permissions rp ON rp.role_id = ur.role_id
-          WHERE ur.user_id = $1
-            AND rp.permission = $2
-            AND rp.scope_kind IS NULL
+          FROM granted_permissions
+          WHERE user_id       = $1
+            AND permission    = $2
+            AND resource_type = $3
+            AND resource_id   IS NULL
           "#,
         )
         .bind(user_id.into_inner())
-        .bind(permission.as_str())
+        .bind(permission)
+        .bind(resource_type)
         .fetch_one(&self.pool)
         .await?
       }
-      Some((scope_kind, scope_id)) => {
+      Some(id) => {
+        // Specific resource: match the exact resource_id OR a wildcard (NULL) grant.
         sqlx::query_scalar(
           r#"
           SELECT COUNT(*)
-          FROM user_roles ur
-          JOIN role_permissions rp ON rp.role_id = ur.role_id
-          WHERE ur.user_id = $1
-            AND rp.permission = $2
-            AND (
-              rp.scope_kind IS NULL
-              OR (rp.scope_kind = $3 AND (rp.scope_id = $4 OR rp.scope_id IS NULL))
-            )
+          FROM granted_permissions
+          WHERE user_id       = $1
+            AND permission    = $2
+            AND resource_type = $3
+            AND (resource_id = $4 OR resource_id IS NULL)
           "#,
         )
         .bind(user_id.into_inner())
-        .bind(permission.as_str())
-        .bind(scope_kind)
-        .bind(scope_id)
+        .bind(permission)
+        .bind(resource_type)
+        .bind(id)
         .fetch_one(&self.pool)
         .await?
       }
@@ -108,11 +83,11 @@ impl AuthorizationService {
     Ok(count > 0)
   }
 
-  /// Enforces that the user has the given global permission.
+  /// Enforces a **global** permission (no resource context).
   ///
-  /// Returns `Err(AppError::PermissionDenied)` if the check fails.
-  pub async fn require(&self, user_id: UserId, permission: Permission) -> AppResult<()> {
-    if !self.has_permission(user_id, permission, None).await? {
+  /// Returns `Err(AppError::PermissionDenied)` if the user does not hold the permission.
+  pub async fn require_global(&self, user_id: UserId, permission: &str) -> AppResult<()> {
+    if !self.has_permission(user_id, permission, &Resource::Global).await? {
       return Err(AppError::PermissionDenied {
         permission: permission.to_string(),
         scope: "global".to_string(),
@@ -121,27 +96,40 @@ impl AuthorizationService {
     Ok(())
   }
 
-  /// Enforces that the user has the given permission in a specific resource scope.
+  /// Enforces a permission for the given [`Resource`] context.
   ///
-  /// A global version of the same permission (`scope_kind IS NULL`) also satisfies
-  /// this check, so users with global access can act on any specific resource.
-  pub async fn require_scoped(
+  /// For `Resource::Shop(Some(id))` a wildcard shop grant also satisfies the check.
+  pub async fn require_resource(
     &self,
     user_id: UserId,
-    permission: Permission,
-    scope_kind: &str,
-    scope_id: Uuid,
+    permission: &str,
+    resource: Resource,
   ) -> AppResult<()> {
-    if !self
-      .has_permission(user_id, permission, Some((scope_kind, scope_id)))
-      .await?
-    {
+    if !self.has_permission(user_id, permission, &resource).await? {
+      let scope = match &resource {
+        Resource::Global => "global".to_string(),
+        Resource::Shop(None) => "shop:any".to_string(),
+        Resource::Shop(Some(id)) => format!("shop:{}", id),
+      };
       return Err(AppError::PermissionDenied {
         permission: permission.to_string(),
-        scope: format!("{}:{}", scope_kind, scope_id),
+        scope,
       });
     }
     Ok(())
+  }
+
+  /// Convenience wrapper: enforces a shop-scoped permission.
+  ///
+  /// - `shop_id = Some(id)` → checks for `shop:<id>` (wildcard grant also satisfies).
+  /// - `shop_id = None`     → checks for a wildcard `shop:any` grant.
+  pub async fn require_shop(
+    &self,
+    user_id: UserId,
+    permission: &str,
+    shop_id: Option<crate::models::ShopId>,
+  ) -> AppResult<()> {
+    self.require_resource(user_id, permission, Resource::Shop(shop_id)).await
   }
 }
 

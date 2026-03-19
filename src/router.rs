@@ -4,7 +4,7 @@ use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::handlers::{auth, guest, health, invites, user};
+use crate::handlers::{auth, guest, health, invites, permissions, user};
 use crate::state::AppState;
 
 #[derive(OpenApi)]
@@ -17,6 +17,7 @@ use crate::state::AppState;
         invites::accept_invite,
         invites::get_invites,
         user::list_users,
+        permissions::list_permissions,
         guest::list_guests,
     ),
     components(
@@ -34,6 +35,7 @@ use crate::state::AppState;
             crate::response::InviteRequest,
             crate::response::InviteResponse,
             crate::response::AcceptInviteRequest,
+            crate::models::PermissionDef,
         )
     ),
     tags(
@@ -67,7 +69,8 @@ pub fn router(state: AppState) -> Router {
     .nest("/auth", auth::router())
     .nest("/invites", invites::router())
     .nest("/users", user::router())
-    .nest("/guests", guest::router());
+    .nest("/guests", guest::router())
+    .nest("/permissions", permissions::router());
 
   Router::new()
     .merge(SwaggerUi::new("/api/docs").url("/api/docs/openapi.json", openapi))

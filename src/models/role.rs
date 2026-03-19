@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::models::permission::Permission;
 use crate::models::UserId;
 use crate::types::Id;
 
@@ -19,22 +18,20 @@ pub struct Role {
 
 pub type RolePermissionId = Id<RolePermission>;
 
-/// Links a role to a code-defined [`Permission`] with an optional resource scope.
+/// Links a role to a permission string with an optional resource scope.
 ///
 /// - When `scope_kind` is `None` the permission applies globally with no resource restriction.
 /// - When `scope_kind` is `Some("shop")` and `scope_id` is `Some(uuid)`, the permission
 ///   applies only to that specific shop.
 /// - When `scope_kind` is `Some("shop")` and `scope_id` is `None`, the permission applies
 ///   to all shops.
-///
-/// This enables checks like: "can user `manage:inventory` **in shop:123**?"
 #[derive(Debug, Clone)]
 pub struct RolePermission {
   pub id: RolePermissionId,
   pub role_id: RoleId,
-  /// The code-defined permission granted by this entry.
-  pub permission: Permission,
-  /// Resource kind this permission is scoped to: `"shop"`, `"register"`, `"event"`, etc.
+  /// The permission string code (e.g. `"settings.configure"`).
+  pub permission: String,
+  /// Resource kind this permission is scoped to: `"shop"`, etc.
   /// `None` means the permission applies globally.
   pub scope_kind: Option<String>,
   /// The specific resource UUID. `None` means all resources of `scope_kind`.

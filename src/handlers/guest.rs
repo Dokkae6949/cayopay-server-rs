@@ -2,8 +2,8 @@ use axum::{extract::State, routing::get, Json, Router};
 
 use crate::{
   error::AppResult,
-  extractors::Auth,
-  models::permission::Permission,
+  extractors::Authz,
+  models::permission::READ_GUEST,
   response::GuestResponse,
   state::AppState,
   stores::GuestStore,
@@ -20,9 +20,9 @@ use crate::{
 )]
 pub async fn list_guests(
   State(state): State<AppState>,
-  auth: Auth,
+  authz: Authz,
 ) -> AppResult<Json<Vec<GuestResponse>>> {
-  auth.require(Permission::ReadGuest)?;
+  authz.require_global(READ_GUEST).await?;
   let guests = GuestStore::list_all(&state.pool).await?;
   Ok(Json(guests.into_iter().map(Into::into).collect()))
 }
