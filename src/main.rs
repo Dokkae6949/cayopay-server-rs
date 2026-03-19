@@ -1,8 +1,22 @@
-use application::{config::Config, services::auth, state::AppState};
-use domain::wallet::WalletLabel;
-use infra::stores::{models::WalletCreation, WalletStore};
+mod config;
+mod error;
+mod extractors;
+mod handlers;
+mod models;
+mod response;
+mod router;
+mod services;
+mod state;
+mod stores;
+mod types;
+
+use config::Config;
+use models::wallet::WalletLabel;
+use services::auth;
 use sqlx::postgres::PgPoolOptions;
+use state::AppState;
 use std::net::SocketAddr;
+use stores::{models::WalletCreation, WalletStore};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -39,12 +53,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   // Initialize application state
   let state = AppState::new(&config, pool);
 
-  // Seed databasse
+  // Seed database
   seed_owner(&state).await?;
   seed_wallets(&state).await?;
 
   // Create router
-  let app = api::router(state);
+  let app = router::router(state);
 
   // Start server
   let addr_str = config.server_addr();
@@ -96,7 +110,7 @@ async fn seed_owner(state: &AppState) -> Result<(), Box<dyn std::error::Error>> 
   .await
   {
     Ok(_) => tracing::info!("Seeded default owner user"),
-    Err(application::error::AppError::UserAlreadyExists) => {
+    Err(error::AppError::UserAlreadyExists) => {
       tracing::debug!("Default owner user already exists");
     }
     Err(e) => {
