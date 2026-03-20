@@ -15,16 +15,19 @@ pub async fn register(
   first_name: String,
   last_name: String,
 ) -> AppResult<User> {
-  if UserStore::find_by_email(pool, &email).await?.is_some() {
+  let mut conn = pool.acquire().await?;
+
+  if UserStore::find_by_email(&mut *conn, &email)
+    .await?
+    .is_some()
+  {
     return Err(AppError::UserAlreadyExists);
   }
 
-  let mut tx = pool.begin().await?;
-
-  let actor = ActorStore::create(&mut *tx).await?;
+  let actor = ActorStore::create(&mut *conn).await?;
 
   let user = UserStore::create(
-    &mut *tx,
+    &mut *conn,
     &UserCreation {
       actor_id: actor,
       email,
@@ -36,7 +39,7 @@ pub async fn register(
   .await?;
 
   WalletStore::create(
-    &mut *tx,
+    &mut *conn,
     &WalletCreation {
       owner: Some(actor),
       label: None,
@@ -44,8 +47,6 @@ pub async fn register(
     },
   )
   .await?;
-
-  tx.commit().await?;
 
   Ok(user)
 }

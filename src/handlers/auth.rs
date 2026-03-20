@@ -8,13 +8,13 @@ use chrono::Duration;
 use uuid::Uuid;
 
 use crate::{
+  error::AppError,
   error::AppResult,
   extractors::{Authn, ValidatedJson},
   response::{LoginRequest, UserResponse},
   state::AppState,
   stores::{models::SessionCreation, SessionStore, UserStore},
   types::{Email, RawPassword},
-  error::AppError,
 };
 
 #[utoipa::path(
@@ -35,7 +35,9 @@ pub async fn login(
   let email = Email::new(payload.email);
   let password = RawPassword::new(payload.password);
 
-  let user = UserStore::find_by_email(&state.pool, &email)
+  let mut conn = state.pool.acquire().await?;
+
+  let user = UserStore::find_by_email(&mut *conn, &email)
     .await?
     .ok_or(AppError::Authentication)?;
 
@@ -44,7 +46,7 @@ pub async fn login(
   }
 
   let session = SessionStore::create(
-    &state.pool,
+    &mut *conn,
     &SessionCreation {
       user_id: user.id,
       token: Uuid::new_v4().to_string(),

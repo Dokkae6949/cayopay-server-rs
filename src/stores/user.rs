@@ -1,15 +1,15 @@
 use crate::models::{ActorId, User, UserId};
 use crate::stores::models::user::{UserCreation, UserRow, UserUpdate};
 use crate::types::Email;
-use sqlx::{Executor, Postgres};
+use sqlx::PgConnection;
 
 pub struct UserStore;
 
 impl UserStore {
-  pub async fn create<'c, E>(executor: E, creation: &UserCreation) -> Result<User, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  pub async fn create(
+    conn: &mut PgConnection,
+    creation: &UserCreation,
+  ) -> Result<User, sqlx::Error> {
     let row = sqlx::query_as::<_, UserRow>(
       r#"
       INSERT INTO users (actor_id, email, password_hash, first_name, last_name)
@@ -22,20 +22,17 @@ impl UserStore {
     .bind(creation.password.expose())
     .bind(&creation.first_name)
     .bind(&creation.last_name)
-    .fetch_one(executor)
+    .fetch_one(&mut *conn)
     .await?;
 
     Ok(row.into())
   }
 
-  pub async fn update_by_id<'c, E>(
-    executor: E,
+  pub async fn update_by_id(
+    conn: &mut PgConnection,
     id: &UserId,
     update: &UserUpdate,
-  ) -> Result<Option<User>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Option<User>, sqlx::Error> {
     let row = sqlx::query_as::<_, UserRow>(
       r#"
       UPDATE users
@@ -52,16 +49,16 @@ impl UserStore {
     .bind(update.password.as_ref().map(|p| p.expose()))
     .bind(update.first_name.as_ref())
     .bind(update.last_name.as_ref())
-    .fetch_optional(executor)
+    .fetch_optional(&mut *conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn find_by_id<'c, E>(executor: E, id: &UserId) -> Result<Option<User>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  pub async fn find_by_id(
+    conn: &mut PgConnection,
+    id: &UserId,
+  ) -> Result<Option<User>, sqlx::Error> {
     let row = sqlx::query_as::<_, UserRow>(
       r#"
       SELECT id, actor_id, email, password_hash, first_name, last_name, created_at, updated_at
@@ -70,16 +67,16 @@ impl UserStore {
       "#,
     )
     .bind(id.into_inner())
-    .fetch_optional(executor)
+    .fetch_optional(&mut *conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn find_by_email<'c, E>(executor: E, email: &Email) -> Result<Option<User>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  pub async fn find_by_email(
+    conn: &mut PgConnection,
+    email: &Email,
+  ) -> Result<Option<User>, sqlx::Error> {
     let row = sqlx::query_as::<_, UserRow>(
       r#"
       SELECT id, actor_id, email, password_hash, first_name, last_name, created_at, updated_at
@@ -88,19 +85,16 @@ impl UserStore {
       "#,
     )
     .bind(email.expose())
-    .fetch_optional(executor)
+    .fetch_optional(&mut *conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn find_by_actor_id<'c, E>(
-    executor: E,
+  pub async fn find_by_actor_id(
+    conn: &mut PgConnection,
     actor_id: &ActorId,
-  ) -> Result<Option<User>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Option<User>, sqlx::Error> {
     let row = sqlx::query_as::<_, UserRow>(
       r#"
       SELECT id, actor_id, email, password_hash, first_name, last_name, created_at, updated_at
@@ -109,23 +103,20 @@ impl UserStore {
       "#,
     )
     .bind(actor_id.into_inner())
-    .fetch_optional(executor)
+    .fetch_optional(&mut *conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn list_all<'c, E>(executor: E) -> Result<Vec<User>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  pub async fn list_all(conn: &mut PgConnection) -> Result<Vec<User>, sqlx::Error> {
     let rows = sqlx::query_as::<_, UserRow>(
       r#"
       SELECT id, actor_id, email, password_hash, first_name, last_name, created_at, updated_at
       FROM users
       "#,
     )
-    .fetch_all(executor)
+    .fetch_all(&mut *conn)
     .await?;
 
     Ok(rows.into_iter().map(Into::into).collect())

@@ -1,19 +1,17 @@
-use crate::models::{
-  Shop, ShopId, ShopMember, ShopMemberId, ShopOffering, ShopOfferingId, UserId,
-};
+use crate::models::{Shop, ShopId, ShopMember, ShopMemberId, ShopOffering, ShopOfferingId, UserId};
 use crate::stores::models::shop::{
   ShopCreation, ShopMemberRow, ShopOfferingCreation, ShopOfferingRow, ShopOfferingUpdate, ShopRow,
   ShopUpdate,
 };
-use sqlx::{Executor, Postgres};
+use sqlx::PgConnection;
 
 pub struct ShopStore;
 
 impl ShopStore {
-  pub async fn create<'c, E>(executor: E, creation: &ShopCreation) -> Result<Shop, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  pub async fn create(
+    conn: &mut PgConnection,
+    creation: &ShopCreation,
+  ) -> Result<Shop, sqlx::Error> {
     let row = sqlx::query_as::<_, ShopRow>(
       r#"
       INSERT INTO shops (owner_user_id, name)
@@ -23,20 +21,17 @@ impl ShopStore {
     )
     .bind(creation.owner.map(|id| id.into_inner()))
     .bind(&creation.name)
-    .fetch_one(executor)
+    .fetch_one(conn)
     .await?;
 
     Ok(row.into())
   }
 
-  pub async fn update_by_id<'c, E>(
-    executor: E,
+  pub async fn update_by_id(
+    conn: &mut PgConnection,
     id: &ShopId,
     update: &ShopUpdate,
-  ) -> Result<Option<Shop>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Option<Shop>, sqlx::Error> {
     let row = sqlx::query_as::<_, ShopRow>(
       r#"
       UPDATE shops
@@ -50,16 +45,16 @@ impl ShopStore {
     .bind(update.owner.is_some())
     .bind(update.owner.flatten().map(|i| i.into_inner()))
     .bind(update.name.as_ref())
-    .fetch_optional(executor)
+    .fetch_optional(conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn find_by_id<'c, E>(executor: E, id: &ShopId) -> Result<Option<Shop>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  pub async fn find_by_id(
+    conn: &mut PgConnection,
+    id: &ShopId,
+  ) -> Result<Option<Shop>, sqlx::Error> {
     let row = sqlx::query_as::<_, ShopRow>(
       r#"
       SELECT id, owner_user_id, name, created_at, updated_at
@@ -68,23 +63,20 @@ impl ShopStore {
       "#,
     )
     .bind(id.into_inner())
-    .fetch_optional(executor)
+    .fetch_optional(conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn list_all<'c, E>(executor: E) -> Result<Vec<Shop>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  pub async fn list_all(conn: &mut PgConnection) -> Result<Vec<Shop>, sqlx::Error> {
     let rows = sqlx::query_as::<_, ShopRow>(
       r#"
       SELECT id, owner_user_id, name, created_at, updated_at
       FROM shops
       "#,
     )
-    .fetch_all(executor)
+    .fetch_all(conn)
     .await?;
 
     Ok(rows.into_iter().map(Into::into).collect())
@@ -94,14 +86,11 @@ impl ShopStore {
 pub struct ShopOfferingStore;
 
 impl ShopOfferingStore {
-  pub async fn create<'c, E>(
-    executor: E,
+  pub async fn create(
+    conn: &mut PgConnection,
     shop_id: &ShopId,
     creation: &ShopOfferingCreation,
-  ) -> Result<ShopOffering, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<ShopOffering, sqlx::Error> {
     let row = sqlx::query_as::<_, ShopOfferingRow>(
       r#"
       INSERT INTO shop_offerings (shop_id, name, description, price_cents)
@@ -113,20 +102,17 @@ impl ShopOfferingStore {
     .bind(&creation.name)
     .bind(creation.description.as_ref())
     .bind(creation.price.as_minor() as i32)
-    .fetch_one(executor)
+    .fetch_one(conn)
     .await?;
 
     Ok(row.into())
   }
 
-  pub async fn update_by_id<'c, E>(
-    executor: E,
+  pub async fn update_by_id(
+    conn: &mut PgConnection,
     id: &ShopOfferingId,
     update: &ShopOfferingUpdate,
-  ) -> Result<Option<ShopOffering>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Option<ShopOffering>, sqlx::Error> {
     let row = sqlx::query_as::<_, ShopOfferingRow>(
       r#"
       UPDATE shop_offerings
@@ -142,31 +128,28 @@ impl ShopOfferingStore {
     .bind(update.description.is_some())
     .bind(update.description.as_ref().and_then(|d| d.as_deref()))
     .bind(update.price.map(|p| p.as_minor() as i32))
-    .fetch_optional(executor)
+    .fetch_optional(conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn delete_by_id<'c, E>(executor: E, id: &ShopOfferingId) -> Result<(), sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  pub async fn delete_by_id(
+    conn: &mut PgConnection,
+    id: &ShopOfferingId,
+  ) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM shop_offerings WHERE id = $1")
       .bind(id.into_inner())
-      .execute(executor)
+      .execute(conn)
       .await?;
 
     Ok(())
   }
 
-  pub async fn find_by_id<'c, E>(
-    executor: E,
+  pub async fn find_by_id(
+    conn: &mut PgConnection,
     id: &ShopOfferingId,
-  ) -> Result<Option<ShopOffering>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Option<ShopOffering>, sqlx::Error> {
     let row = sqlx::query_as::<_, ShopOfferingRow>(
       r#"
       SELECT id, shop_id, name, description, price_cents, created_at, updated_at
@@ -175,19 +158,16 @@ impl ShopOfferingStore {
       "#,
     )
     .bind(id.into_inner())
-    .fetch_optional(executor)
+    .fetch_optional(conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn list_by_shop_id<'c, E>(
-    executor: E,
+  pub async fn list_by_shop_id(
+    conn: &mut PgConnection,
     shop_id: &ShopId,
-  ) -> Result<Vec<ShopOffering>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Vec<ShopOffering>, sqlx::Error> {
     let rows = sqlx::query_as::<_, ShopOfferingRow>(
       r#"
       SELECT id, shop_id, name, description, price_cents, created_at, updated_at
@@ -196,7 +176,7 @@ impl ShopOfferingStore {
       "#,
     )
     .bind(shop_id.into_inner())
-    .fetch_all(executor)
+    .fetch_all(conn)
     .await?;
 
     Ok(rows.into_iter().map(Into::into).collect())
@@ -206,14 +186,11 @@ impl ShopOfferingStore {
 pub struct ShopMemberStore;
 
 impl ShopMemberStore {
-  pub async fn create<'c, E>(
-    executor: E,
+  pub async fn create(
+    conn: &mut PgConnection,
     shop_id: &ShopId,
     user_id: &UserId,
-  ) -> Result<ShopMember, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<ShopMember, sqlx::Error> {
     let row = sqlx::query_as::<_, ShopMemberRow>(
       r#"
       INSERT INTO shop_members (shop_id, user_id)
@@ -223,36 +200,30 @@ impl ShopMemberStore {
     )
     .bind(shop_id.into_inner())
     .bind(user_id.into_inner())
-    .fetch_one(executor)
+    .fetch_one(conn)
     .await?;
 
     Ok(row.into())
   }
 
-  pub async fn delete_by_shop_and_user_id<'c, E>(
-    executor: E,
+  pub async fn delete_by_shop_and_user_id(
+    conn: &mut PgConnection,
     shop_id: &ShopId,
     user_id: &UserId,
-  ) -> Result<(), sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM shop_members WHERE shop_id = $1 AND user_id = $2")
       .bind(shop_id.into_inner())
       .bind(user_id.into_inner())
-      .execute(executor)
+      .execute(conn)
       .await?;
 
     Ok(())
   }
 
-  pub async fn find_by_id<'c, E>(
-    executor: E,
+  pub async fn find_by_id(
+    conn: &mut PgConnection,
     id: &ShopMemberId,
-  ) -> Result<Option<ShopMember>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Option<ShopMember>, sqlx::Error> {
     let row = sqlx::query_as::<_, ShopMemberRow>(
       r#"
       SELECT id, shop_id, user_id, created_at, updated_at
@@ -261,20 +232,17 @@ impl ShopMemberStore {
       "#,
     )
     .bind(id.into_inner())
-    .fetch_optional(executor)
+    .fetch_optional(conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn find_by_shop_and_user_id<'c, E>(
-    executor: E,
+  pub async fn find_by_shop_and_user_id(
+    conn: &mut PgConnection,
     shop_id: &ShopId,
     user_id: &UserId,
-  ) -> Result<Option<ShopMember>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Option<ShopMember>, sqlx::Error> {
     let row = sqlx::query_as::<_, ShopMemberRow>(
       r#"
       SELECT id, shop_id, user_id, created_at, updated_at
@@ -284,19 +252,16 @@ impl ShopMemberStore {
     )
     .bind(shop_id.into_inner())
     .bind(user_id.into_inner())
-    .fetch_optional(executor)
+    .fetch_optional(conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn list_by_shop_id<'c, E>(
-    executor: E,
+  pub async fn list_by_shop_id(
+    conn: &mut PgConnection,
     shop_id: &ShopId,
-  ) -> Result<Vec<ShopMember>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Vec<ShopMember>, sqlx::Error> {
     let rows = sqlx::query_as::<_, ShopMemberRow>(
       r#"
       SELECT id, shop_id, user_id, created_at, updated_at
@@ -305,19 +270,16 @@ impl ShopMemberStore {
       "#,
     )
     .bind(shop_id.into_inner())
-    .fetch_all(executor)
+    .fetch_all(conn)
     .await?;
 
     Ok(rows.into_iter().map(Into::into).collect())
   }
 
-  pub async fn list_by_user_id<'c, E>(
-    executor: E,
+  pub async fn list_by_user_id(
+    conn: &mut PgConnection,
     user_id: &UserId,
-  ) -> Result<Vec<ShopMember>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Vec<ShopMember>, sqlx::Error> {
     let rows = sqlx::query_as::<_, ShopMemberRow>(
       r#"
       SELECT id, shop_id, user_id, created_at, updated_at
@@ -326,7 +288,7 @@ impl ShopMemberStore {
       "#,
     )
     .bind(user_id.into_inner())
-    .fetch_all(executor)
+    .fetch_all(conn)
     .await?;
 
     Ok(rows.into_iter().map(Into::into).collect())

@@ -1,17 +1,14 @@
 use crate::models::{Session, UserId};
 use crate::stores::models::session::{SessionCreation, SessionRow};
-use sqlx::{Executor, Postgres};
+use sqlx::PgConnection;
 
 pub struct SessionStore;
 
 impl SessionStore {
-  pub async fn create<'c, E>(
-    executor: E,
+  pub async fn create(
+    conn: &mut PgConnection,
     creation: &SessionCreation,
-  ) -> Result<Session, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Session, sqlx::Error> {
     let row = sqlx::query_as::<_, SessionRow>(
       r#"
       INSERT INTO sessions (user_id, token, user_agent, ip_address, expires_at)
@@ -24,31 +21,25 @@ impl SessionStore {
     .bind(&creation.user_agent)
     .bind(&creation.ip_address)
     .bind(chrono::Utc::now() + creation.expires_in)
-    .fetch_one(executor)
+    .fetch_one(conn)
     .await?;
 
     Ok(row.into())
   }
 
-  pub async fn delete_by_token<'c, E>(executor: E, token: &str) -> Result<(), sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  pub async fn delete_by_token(conn: &mut PgConnection, token: &str) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM sessions WHERE token = $1")
       .bind(token)
-      .execute(executor)
+      .execute(conn)
       .await?;
 
     Ok(())
   }
 
-  pub async fn find_by_token<'c, E>(
-    executor: E,
+  pub async fn find_by_token(
+    conn: &mut PgConnection,
     token: &str,
-  ) -> Result<Option<Session>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Option<Session>, sqlx::Error> {
     let row = sqlx::query_as::<_, SessionRow>(
       r#"
       SELECT id, user_id, token, user_agent, ip_address, expires_at, created_at, updated_at
@@ -57,19 +48,16 @@ impl SessionStore {
       "#,
     )
     .bind(token)
-    .fetch_optional(executor)
+    .fetch_optional(conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn list_by_user_id<'c, E>(
-    executor: E,
+  pub async fn list_by_user_id(
+    conn: &mut PgConnection,
     user_id: &UserId,
-  ) -> Result<Vec<Session>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Vec<Session>, sqlx::Error> {
     let rows = sqlx::query_as::<_, SessionRow>(
       r#"
       SELECT id, user_id, token, user_agent, ip_address, expires_at, created_at, updated_at
@@ -78,7 +66,7 @@ impl SessionStore {
       "#,
     )
     .bind(user_id.into_inner())
-    .fetch_all(executor)
+    .fetch_all(conn)
     .await?;
 
     Ok(rows.into_iter().map(Into::into).collect())

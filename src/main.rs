@@ -5,18 +5,16 @@ mod handlers;
 mod models;
 mod response;
 mod router;
+mod seed;
 mod services;
 mod state;
 mod stores;
 mod types;
 
 use config::Config;
-use models::wallet::WalletLabel;
-use services::auth;
 use sqlx::postgres::PgPoolOptions;
 use state::AppState;
 use std::net::SocketAddr;
-use stores::{models::WalletCreation, WalletStore};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -54,8 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let state = AppState::new(&config, pool);
 
   // Seed database
-  seed_owner(&state).await?;
-  seed_wallets(&state).await?;
+  seed::owner(&state).await?;
+  seed::wallets(&state).await?;
 
   // Create router
   let app = router::router(state);
@@ -97,54 +95,4 @@ async fn shutdown_signal() {
   }
 
   tracing::info!("signal received, starting graceful shutdown");
-}
-
-async fn seed_owner(state: &AppState) -> Result<(), Box<dyn std::error::Error>> {
-  match auth::register(
-    &state.pool,
-    state.config.owner_email.clone(),
-    state.config.owner_password.clone(),
-    state.config.owner_first_name.clone(),
-    state.config.owner_last_name.clone(),
-  )
-  .await
-  {
-    Ok(_) => tracing::info!("Seeded default owner user"),
-    Err(error::AppError::UserAlreadyExists) => {
-      tracing::debug!("Default owner user already exists");
-    }
-    Err(e) => {
-      tracing::warn!("Failed to seed owner user: {}", e);
-      return Err(Box::new(e));
-    }
-  }
-  Ok(())
-}
-
-async fn seed_wallets(state: &AppState) -> Result<(), Box<dyn std::error::Error>> {
-  for label in WalletLabel::variants() {
-    match WalletStore::create(
-      &state.pool,
-      &WalletCreation {
-        owner: None,
-        label: Some(label.clone()),
-        allow_overdraft: true,
-      },
-    )
-    .await
-    {
-      Ok(_) => tracing::info!("Seeded wallet with label {:?}", label),
-      Err(sqlx::Error::Database(db_err))
-        if db_err.kind() == sqlx::error::ErrorKind::UniqueViolation =>
-      {
-        tracing::debug!("Wallet with label {:?} already exists", label);
-      }
-      Err(e) => {
-        tracing::warn!("Failed to seed wallet with label {:?}: {}", label, e);
-        return Err(Box::new(e));
-      }
-    }
-  }
-
-  Ok(())
 }

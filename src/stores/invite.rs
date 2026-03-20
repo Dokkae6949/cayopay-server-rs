@@ -1,15 +1,15 @@
 use crate::models::{Invite, InviteId};
 use crate::stores::models::invite::{InviteCreation, InviteRow, InviteUpdate};
 use crate::types::Email;
-use sqlx::{Executor, Postgres};
+use sqlx::PgConnection;
 
 pub struct InviteStore;
 
 impl InviteStore {
-  pub async fn create<'c, E>(executor: E, creation: &InviteCreation) -> Result<Invite, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  pub async fn create(
+    conn: &mut PgConnection,
+    creation: &InviteCreation,
+  ) -> Result<Invite, sqlx::Error> {
     let row = sqlx::query_as::<_, InviteRow>(
       r#"
       INSERT INTO invites (invitor_user_id, email, token, role, expires_at)
@@ -22,20 +22,17 @@ impl InviteStore {
     .bind(&creation.token)
     .bind(&creation.role)
     .bind(chrono::Utc::now() + creation.expires_in)
-    .fetch_one(executor)
+    .fetch_one(&mut *conn)
     .await?;
 
     Ok(row.into())
   }
 
-  pub async fn update_by_id<'c, E>(
-    executor: E,
+  pub async fn update_by_id(
+    conn: &mut PgConnection,
     id: &InviteId,
     update: &InviteUpdate,
-  ) -> Result<Option<Invite>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Option<Invite>, sqlx::Error> {
     let row = sqlx::query_as::<_, InviteRow>(
       r#"
       UPDATE invites
@@ -46,28 +43,25 @@ impl InviteStore {
     )
     .bind(id.into_inner())
     .bind(update.status.as_ref().map(ToString::to_string))
-    .fetch_optional(executor)
+    .fetch_optional(&mut *conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn delete_by_id<'c, E>(executor: E, id: &InviteId) -> Result<(), sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  pub async fn delete_by_id(conn: &mut PgConnection, id: &InviteId) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM invites WHERE id = $1")
       .bind(id.into_inner())
-      .execute(executor)
+      .execute(&mut *conn)
       .await?;
 
     Ok(())
   }
 
-  pub async fn find_by_token<'c, E>(executor: E, token: &str) -> Result<Option<Invite>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  pub async fn find_by_token(
+    conn: &mut PgConnection,
+    token: &str,
+  ) -> Result<Option<Invite>, sqlx::Error> {
     let row = sqlx::query_as::<_, InviteRow>(
       r#"
       SELECT id, invitor_user_id, email, token, role, status, expires_at, created_at, updated_at
@@ -76,19 +70,16 @@ impl InviteStore {
       "#,
     )
     .bind(token)
-    .fetch_optional(executor)
+    .fetch_optional(&mut *conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn find_by_email<'c, E>(
-    executor: E,
+  pub async fn find_by_email(
+    conn: &mut PgConnection,
     email: &Email,
-  ) -> Result<Option<Invite>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  ) -> Result<Option<Invite>, sqlx::Error> {
     let row = sqlx::query_as::<_, InviteRow>(
       r#"
       SELECT id, invitor_user_id, email, token, role, status, expires_at, created_at, updated_at
@@ -97,23 +88,20 @@ impl InviteStore {
       "#,
     )
     .bind(email.expose())
-    .fetch_optional(executor)
+    .fetch_optional(&mut *conn)
     .await?;
 
     Ok(row.map(Into::into))
   }
 
-  pub async fn list_all<'c, E>(executor: E) -> Result<Vec<Invite>, sqlx::Error>
-  where
-    E: Executor<'c, Database = Postgres>,
-  {
+  pub async fn list_all(conn: &mut PgConnection) -> Result<Vec<Invite>, sqlx::Error> {
     let rows = sqlx::query_as::<_, InviteRow>(
       r#"
       SELECT id, invitor_user_id, email, token, role, status, expires_at, created_at, updated_at
       FROM invites
       "#,
     )
-    .fetch_all(executor)
+    .fetch_all(&mut *conn)
     .await?;
 
     Ok(rows.into_iter().map(Into::into).collect())
