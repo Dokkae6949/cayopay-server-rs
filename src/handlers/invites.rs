@@ -9,9 +9,9 @@ use uuid::Uuid;
 use crate::{
   error::{AppError, AppResult},
   extractors::{Authz, ValidatedJson},
-  models::permission::{SEND_INVITE, VIEW_INVITE},
+  models::permission::GlobalPermission,
   response::{AcceptInviteRequest, InviteRequest, InviteResponse},
-  services::auth,
+  services::{auth, PermissionEngine},
   state::AppState,
   stores::{
     models::{InviteCreation, UserRoleCreation},
@@ -39,7 +39,7 @@ pub async fn create_invite(
   authz: Authz,
   ValidatedJson(payload): ValidatedJson<InviteRequest>,
 ) -> AppResult<()> {
-  authz.require_global(SEND_INVITE).await?;
+  authz.global().require(GlobalPermission::SendInvite).await?;
 
   if RoleStore::find_by_name(&state.pool, &payload.role).await?.is_none() {
     return Err(AppError::BadRequest(format!("Role '{}' does not exist", payload.role)));
@@ -99,7 +99,7 @@ pub async fn get_invites(
   State(state): State<AppState>,
   authz: Authz,
 ) -> AppResult<Json<Vec<InviteResponse>>> {
-  authz.require_global(VIEW_INVITE).await?;
+  authz.global().require(GlobalPermission::ViewInvite).await?;
   let invites = InviteStore::list_all(&state.pool).await?;
   Ok(Json(invites.into_iter().map(InviteResponse::from).collect()))
 }

@@ -3,8 +3,9 @@ use axum::{extract::State, routing::get, Json, Router};
 use crate::{
   error::AppResult,
   extractors::Authz,
-  models::permission::READ_USER,
+  models::permission::GlobalPermission,
   response::UserResponse,
+  services::PermissionEngine,
   state::AppState,
   stores::UserStore,
 };
@@ -23,7 +24,7 @@ pub async fn list_users(
   State(state): State<AppState>,
   authz: Authz,
 ) -> AppResult<Json<Vec<UserResponse>>> {
-  authz.require_global(READ_USER).await?;
+  authz.global().require(GlobalPermission::ReadUser).await?;
   let users = UserStore::list_all(&state.pool).await?;
   Ok(Json(users.into_iter().map(Into::into).collect()))
 }

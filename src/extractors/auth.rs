@@ -3,22 +3,30 @@ use std::ops::Deref;
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts, RequestPartsExt};
 use axum_extra::extract::CookieJar;
 
-use crate::error::{AppError, AppResult};
-use crate::models::{Resource, ShopId, User};
-use crate::services::{authorization::AuthorizationService, session};
+use crate::error::AppError;
+use crate::models::{ShopId, User};
+use crate::services::{
+  authorization::{AuthorizationService, GlobalEngine, ShopEngine},
+  session,
+};
 use crate::state::AppState;
 
 /// Combined authentication + authorisation extractor.
 ///
 /// Extracting `Authz` from a handler authenticates the caller from the session
-/// cookie and provides async permission-checking methods that query the
-/// `granted_permissions` table on demand.
+/// cookie and exposes typed, scoped permission engines for clean permission checks.
 ///
 /// # Usage
 /// ```rust,ignore
 /// async fn my_handler(authz: Authz) -> AppResult<()> {
-///     authz.require_global("settings.configure").await?;
-///     authz.require_shop("product.create", Some(shop_id)).await?;
+///     // Single permission
+///     authz.global().require(GlobalPermission::ConfigureSettings).await?;
+///     // Any-of check
+///     authz.global().require_any(&[GlobalPermission::SendInvite, GlobalPermission::ViewInvite]).await?;
+///     // All-of check
+///     authz.global().require_all(&[GlobalPermission::ReadUser, GlobalPermission::RemoveUser]).await?;
+///     // Shop-scoped check (shop_id is always required)
+///     authz.shop(shop_id).require(ShopPermission::CreateProduct).await?;
 ///     // authz also derefs to the authenticated User
 ///     println!("{}", authz.first_name);
 ///     Ok(())
@@ -30,22 +38,19 @@ pub struct Authz {
 }
 
 impl Authz {
-  /// Enforces a **global** permission (no resource context).
-  pub async fn require_global(&self, permission: &str) -> AppResult<()> {
-    self.authz.require_global(self.user.id, permission).await
+  /// Returns a [`GlobalEngine`] scoped to the authenticated user for
+  /// system-wide permission checks.
+  pub fn global(&self) -> GlobalEngine {
+    GlobalEngine { user_id: self.user.id, authz: self.authz.clone() }
   }
 
-  /// Enforces a permission for the given [`Resource`] context.
-  pub async fn require_resource(&self, permission: &str, resource: Resource) -> AppResult<()> {
-    self.authz.require_resource(self.user.id, permission, resource).await
-  }
-
-  /// Convenience: enforces a shop-scoped permission.
+  /// Returns a [`ShopEngine`] scoped to the authenticated user for
+  /// shop-scoped permission checks.
   ///
-  /// - `shop_id = Some(id)` – checks for that specific shop (wildcard also satisfies).
-  /// - `shop_id = None`     – checks for an "any shop" wildcard grant.
-  pub async fn require_shop(&self, permission: &str, shop_id: Option<ShopId>) -> AppResult<()> {
-    self.authz.require_shop(self.user.id, permission, shop_id).await
+  /// The shop ID is always required; a wildcard grant on the shop type
+  /// also satisfies any check.
+  pub fn shop(&self, shop_id: ShopId) -> ShopEngine {
+    ShopEngine { user_id: self.user.id, shop_id, authz: self.authz.clone() }
   }
 }
 
@@ -84,5 +89,30 @@ impl FromRequestParts<AppState> for Authz {
       user,
       authz: state.authz_service.clone(),
     })
+  }
+}
+
+/// Extension trait that adds scoped permission-engine accessors to any type
+/// that holds an [`Authz`].
+///
+/// This is automatically implemented for [`Authz`] itself.  Third-party
+/// middleware wrappers can implement it for their own types.
+pub trait AuthzExt {
+  /// Returns a [`GlobalEngine`] for system-wide permission checks.
+  fn global(&self) -> GlobalEngine;
+
+  /// Returns a [`ShopEngine`] for shop-scoped permission checks.
+  ///
+  /// The shop ID is always required.
+  fn shop(&self, shop_id: ShopId) -> ShopEngine;
+}
+
+impl AuthzExt for Authz {
+  fn global(&self) -> GlobalEngine {
+    Authz::global(self)
+  }
+
+  fn shop(&self, shop_id: ShopId) -> ShopEngine {
+    Authz::shop(self, shop_id)
   }
 }
