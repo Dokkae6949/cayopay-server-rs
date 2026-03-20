@@ -3,23 +3,77 @@ use uuid::Uuid;
 use crate::models::ShopId;
 
 // ---------------------------------------------------------------------------
-// Permission string constants
+// GlobalPermission – type-safe global (system-wide) permissions
 // ---------------------------------------------------------------------------
 
-/// Configure system-wide settings.
-pub const CONFIGURE_SETTINGS: &str = "settings.configure";
-/// Send an invite to a new user.
-pub const SEND_INVITE: &str = "invite.send";
-/// View all existing invites.
-pub const VIEW_INVITE: &str = "invite.view";
-/// Remove a user from the system.
-pub const REMOVE_USER: &str = "user.remove";
-/// Read user details.
-pub const READ_USER: &str = "user.read";
-/// Remove a guest from the system.
-pub const REMOVE_GUEST: &str = "guest.remove";
-/// Read guest details.
-pub const READ_GUEST: &str = "guest.read";
+/// All system-wide (global) permissions recognised by the authorization engine.
+///
+/// Use this enum with [`GlobalEngine`][crate::services::authorization::GlobalEngine]:
+/// ```rust,ignore
+/// authz.global().require(GlobalPermission::ReadUser).await?;
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GlobalPermission {
+  /// Configure system-wide settings.
+  ConfigureSettings,
+  /// Send an invite to a new user.
+  SendInvite,
+  /// View all existing invites.
+  ViewInvite,
+  /// Remove a user from the system.
+  RemoveUser,
+  /// Read user details.
+  ReadUser,
+  /// Remove a guest from the system.
+  RemoveGuest,
+  /// Read guest details.
+  ReadGuest,
+}
+
+impl GlobalPermission {
+  /// The permission string stored in the database.
+  pub const fn as_str(self) -> &'static str {
+    match self {
+      Self::ConfigureSettings => "settings.configure",
+      Self::SendInvite => "invite.send",
+      Self::ViewInvite => "invite.view",
+      Self::RemoveUser => "user.remove",
+      Self::ReadUser => "user.read",
+      Self::RemoveGuest => "guest.remove",
+      Self::ReadGuest => "guest.read",
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ShopPermission – type-safe shop-scoped permissions
+// ---------------------------------------------------------------------------
+
+/// All shop-scoped permissions recognised by the authorization engine.
+///
+/// Use this enum with [`ShopEngine`][crate::services::authorization::ShopEngine]:
+/// ```rust,ignore
+/// authz.shop(shop_id).require(ShopPermission::CreateProduct).await?;
+/// ```
+///
+/// # Note
+/// This enum is currently empty (no shop-scoped permissions have been defined yet).
+/// It exists as a typed placeholder so that `ShopEngine` is correctly scoped to its
+/// own permission type from the start.  Add variants here when shop permissions are
+/// introduced; the compiler will then require all `ShopEngine` call-sites to be
+/// updated to use the correct type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShopPermission {}
+
+impl ShopPermission {
+  /// The permission string stored in the database.
+  ///
+  /// This method can never be called because `ShopPermission` is uninhabited —
+  /// Rust allows an empty `match self {}` for such types.
+  pub const fn as_str(self) -> &'static str {
+    match self {}
+  }
+}
 
 // ---------------------------------------------------------------------------
 // PermissionDef – catalogue for the frontend
@@ -39,37 +93,37 @@ pub struct PermissionDef {
 /// All permissions recognised by the system.
 pub const PERMISSIONS: &[PermissionDef] = &[
   PermissionDef {
-    name: CONFIGURE_SETTINGS,
+    name: GlobalPermission::ConfigureSettings.as_str(),
     description: "Configure system-wide settings.",
     resource_type: "global",
   },
   PermissionDef {
-    name: SEND_INVITE,
+    name: GlobalPermission::SendInvite.as_str(),
     description: "Send an invite to a new user.",
     resource_type: "global",
   },
   PermissionDef {
-    name: VIEW_INVITE,
+    name: GlobalPermission::ViewInvite.as_str(),
     description: "View all existing invites.",
     resource_type: "global",
   },
   PermissionDef {
-    name: REMOVE_USER,
+    name: GlobalPermission::RemoveUser.as_str(),
     description: "Remove a user from the system.",
     resource_type: "global",
   },
   PermissionDef {
-    name: READ_USER,
+    name: GlobalPermission::ReadUser.as_str(),
     description: "Read user details.",
     resource_type: "global",
   },
   PermissionDef {
-    name: REMOVE_GUEST,
+    name: GlobalPermission::RemoveGuest.as_str(),
     description: "Remove a guest from the system.",
     resource_type: "global",
   },
   PermissionDef {
-    name: READ_GUEST,
+    name: GlobalPermission::ReadGuest.as_str(),
     description: "Read guest details.",
     resource_type: "global",
   },
@@ -121,6 +175,17 @@ mod tests {
       assert!(!p.description.is_empty());
       assert!(p.resource_type == "global" || p.resource_type == "shop");
     }
+  }
+
+  #[test]
+  fn global_permission_as_str() {
+    assert_eq!(GlobalPermission::ConfigureSettings.as_str(), "settings.configure");
+    assert_eq!(GlobalPermission::SendInvite.as_str(), "invite.send");
+    assert_eq!(GlobalPermission::ViewInvite.as_str(), "invite.view");
+    assert_eq!(GlobalPermission::RemoveUser.as_str(), "user.remove");
+    assert_eq!(GlobalPermission::ReadUser.as_str(), "user.read");
+    assert_eq!(GlobalPermission::RemoveGuest.as_str(), "guest.remove");
+    assert_eq!(GlobalPermission::ReadGuest.as_str(), "guest.read");
   }
 
   #[test]

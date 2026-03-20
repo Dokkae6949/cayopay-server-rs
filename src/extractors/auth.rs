@@ -20,13 +20,13 @@ use crate::state::AppState;
 /// ```rust,ignore
 /// async fn my_handler(authz: Authz) -> AppResult<()> {
 ///     // Single permission
-///     authz.global().require("settings.configure").await?;
+///     authz.global().require(GlobalPermission::ConfigureSettings).await?;
 ///     // Any-of check
-///     authz.global().require_any(&["invite.send", "invite.view"]).await?;
+///     authz.global().require_any(&[GlobalPermission::SendInvite, GlobalPermission::ViewInvite]).await?;
 ///     // All-of check
-///     authz.global().require_all(&["user.read", "user.remove"]).await?;
-///     // Shop-scoped check
-///     authz.shop(Some(shop_id)).require("product.create").await?;
+///     authz.global().require_all(&[GlobalPermission::ReadUser, GlobalPermission::RemoveUser]).await?;
+///     // Shop-scoped check (shop_id is always required)
+///     authz.shop(shop_id).require(ShopPermission::CreateProduct).await?;
 ///     // authz also derefs to the authenticated User
 ///     println!("{}", authz.first_name);
 ///     Ok(())
@@ -47,9 +47,9 @@ impl Authz {
   /// Returns a [`ShopEngine`] scoped to the authenticated user for
   /// shop-scoped permission checks.
   ///
-  /// - `shop_id = Some(id)` – checks permissions for that specific shop.
-  /// - `shop_id = None` – checks for a wildcard "any shop" grant.
-  pub fn shop(&self, shop_id: Option<ShopId>) -> ShopEngine {
+  /// The shop ID is always required; a wildcard grant on the shop type
+  /// also satisfies any check.
+  pub fn shop(&self, shop_id: ShopId) -> ShopEngine {
     ShopEngine { user_id: self.user.id, shop_id, authz: self.authz.clone() }
   }
 }
@@ -102,7 +102,9 @@ pub trait AuthzExt {
   fn global(&self) -> GlobalEngine;
 
   /// Returns a [`ShopEngine`] for shop-scoped permission checks.
-  fn shop(&self, shop_id: Option<ShopId>) -> ShopEngine;
+  ///
+  /// The shop ID is always required.
+  fn shop(&self, shop_id: ShopId) -> ShopEngine;
 }
 
 impl AuthzExt for Authz {
@@ -110,7 +112,7 @@ impl AuthzExt for Authz {
     Authz::global(self)
   }
 
-  fn shop(&self, shop_id: Option<ShopId>) -> ShopEngine {
+  fn shop(&self, shop_id: ShopId) -> ShopEngine {
     Authz::shop(self, shop_id)
   }
 }

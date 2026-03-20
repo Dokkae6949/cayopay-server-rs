@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 
 use crate::error::{AppError, AppResult};
-use crate::models::permission::Resource;
+use crate::models::permission::{GlobalPermission, Resource, ShopPermission};
 use crate::models::{ShopId, UserId};
 
 /// Service for checking whether a user has been directly granted a permission.
@@ -119,17 +119,16 @@ impl AuthorizationService {
     Ok(())
   }
 
-  /// Convenience wrapper: enforces a shop-scoped permission.
+  /// Convenience wrapper: enforces a shop-scoped permission for a specific shop.
   ///
-  /// - `shop_id = Some(id)` → checks for `shop:<id>` (wildcard grant also satisfies).
-  /// - `shop_id = None`     → checks for a wildcard `shop:any` grant.
+  /// A wildcard grant (`resource_id IS NULL`) also satisfies the check.
   pub async fn require_shop(
     &self,
     user_id: UserId,
     permission: &str,
-    shop_id: Option<crate::models::ShopId>,
+    shop_id: ShopId,
   ) -> AppResult<()> {
-    self.require_resource(user_id, permission, Resource::Shop(shop_id)).await
+    self.require_resource(user_id, permission, Resource::Shop(Some(shop_id))).await
   }
 }
 
@@ -139,29 +138,33 @@ impl AuthorizationService {
 
 /// A scoped permission engine that checks permissions within a fixed resource context.
 ///
-/// Each implementor is bound to a particular user and a particular scope (e.g.
-/// "global" or "shop:<id>"), so callers can express requirements concisely:
+/// The associated type [`Permission`][PermissionEngine::Permission] enforces that
+/// only permissions belonging to the correct scope can be used with each engine —
+/// you cannot pass a [`ShopPermission`] to a [`GlobalEngine`] or vice versa.
 ///
 /// ```rust,ignore
-/// authz.global().require(READ_USER).await?;
-/// authz.global().require_all(&[READ_USER, REMOVE_USER]).await?;
-/// authz.shop(Some(shop_id)).require("product.create").await?;
+/// authz.global().require(GlobalPermission::ReadUser).await?;
+/// authz.global().require_all(&[GlobalPermission::ReadUser, GlobalPermission::RemoveUser]).await?;
+/// authz.shop(shop_id).require(ShopPermission::CreateProduct).await?;
 /// ```
 pub trait PermissionEngine {
+  /// The permission type accepted by this engine.
+  type Permission: Copy;
+
   /// Require the caller to hold exactly this permission.
   ///
   /// Returns `Err(AppError::PermissionDenied)` when the permission is absent.
-  async fn require(&self, permission: &str) -> AppResult<()>;
+  async fn require(&self, permission: Self::Permission) -> AppResult<()>;
 
   /// Require the caller to hold **at least one** of the given permissions.
   ///
   /// Returns `Err(AppError::PermissionDenied)` only when none are held.
-  async fn require_any(&self, permissions: &[&str]) -> AppResult<()>;
+  async fn require_any(&self, permissions: &[Self::Permission]) -> AppResult<()>;
 
   /// Require the caller to hold **all** of the given permissions.
   ///
   /// Returns `Err(AppError::PermissionDenied)` on the first missing permission.
-  async fn require_all(&self, permissions: &[&str]) -> AppResult<()>;
+  async fn require_all(&self, permissions: &[Self::Permission]) -> AppResult<()>;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,25 +180,28 @@ pub struct GlobalEngine {
 }
 
 impl PermissionEngine for GlobalEngine {
-  async fn require(&self, permission: &str) -> AppResult<()> {
-    self.authz.require_global(self.user_id, permission).await
+  type Permission = GlobalPermission;
+
+  async fn require(&self, permission: GlobalPermission) -> AppResult<()> {
+    self.authz.require_global(self.user_id, permission.as_str()).await
   }
 
-  async fn require_any(&self, permissions: &[&str]) -> AppResult<()> {
+  async fn require_any(&self, permissions: &[GlobalPermission]) -> AppResult<()> {
     for &permission in permissions {
-      if self.authz.has_permission(self.user_id, permission, &Resource::Global).await? {
+      if self.authz.has_permission(self.user_id, permission.as_str(), &Resource::Global).await? {
         return Ok(());
       }
     }
+    let names: Vec<&str> = permissions.iter().map(|p| p.as_str()).collect();
     Err(AppError::PermissionDenied {
-      permission: format!("any of [{}]", permissions.join(", ")),
+      permission: format!("any of [{}]", names.join(", ")),
       scope: "global".to_string(),
     })
   }
 
-  async fn require_all(&self, permissions: &[&str]) -> AppResult<()> {
+  async fn require_all(&self, permissions: &[GlobalPermission]) -> AppResult<()> {
     for &permission in permissions {
-      self.authz.require_global(self.user_id, permission).await?;
+      self.authz.require_global(self.user_id, permission.as_str()).await?;
     }
     Ok(())
   }
@@ -207,47 +213,46 @@ impl PermissionEngine for GlobalEngine {
 
 /// Permission engine for shop-scoped permission checks.
 ///
-/// - `shop_id = Some(id)` – checks permissions for that specific shop
-///   (a wildcard grant also satisfies the check).
-/// - `shop_id = None` – checks for a "any shop" wildcard grant.
+/// Always requires a specific [`ShopId`] — a wildcard grant (`resource_id IS NULL`)
+/// on that shop type also satisfies any check.
 ///
 /// Obtain one via [`Authz::shop`][crate::extractors::Authz::shop].
 pub struct ShopEngine {
   pub(crate) user_id: UserId,
-  pub(crate) shop_id: Option<ShopId>,
+  pub(crate) shop_id: ShopId,
   pub(crate) authz: AuthorizationService,
 }
 
 impl ShopEngine {
   fn scope(&self) -> String {
-    match self.shop_id {
-      None => "shop:any".to_string(),
-      Some(id) => format!("shop:{id}"),
-    }
+    format!("shop:{}", self.shop_id)
   }
 }
 
 impl PermissionEngine for ShopEngine {
-  async fn require(&self, permission: &str) -> AppResult<()> {
-    self.authz.require_shop(self.user_id, permission, self.shop_id).await
+  type Permission = ShopPermission;
+
+  async fn require(&self, permission: ShopPermission) -> AppResult<()> {
+    self.authz.require_shop(self.user_id, permission.as_str(), self.shop_id).await
   }
 
-  async fn require_any(&self, permissions: &[&str]) -> AppResult<()> {
-    let resource = Resource::Shop(self.shop_id);
+  async fn require_any(&self, permissions: &[ShopPermission]) -> AppResult<()> {
+    let resource = Resource::Shop(Some(self.shop_id));
     for &permission in permissions {
-      if self.authz.has_permission(self.user_id, permission, &resource).await? {
+      if self.authz.has_permission(self.user_id, permission.as_str(), &resource).await? {
         return Ok(());
       }
     }
+    let names: Vec<&str> = permissions.iter().map(|p| p.as_str()).collect();
     Err(AppError::PermissionDenied {
-      permission: format!("any of [{}]", permissions.join(", ")),
+      permission: format!("any of [{}]", names.join(", ")),
       scope: self.scope(),
     })
   }
 
-  async fn require_all(&self, permissions: &[&str]) -> AppResult<()> {
+  async fn require_all(&self, permissions: &[ShopPermission]) -> AppResult<()> {
     for &permission in permissions {
-      self.authz.require_shop(self.user_id, permission, self.shop_id).await?;
+      self.authz.require_shop(self.user_id, permission.as_str(), self.shop_id).await?;
     }
     Ok(())
   }
