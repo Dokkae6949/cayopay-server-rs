@@ -5,6 +5,7 @@ use crate::{
   extractors::Authz,
   models::permission::READ_GUEST,
   response::GuestResponse,
+  services::PermissionEngine,
   state::AppState,
   stores::GuestStore,
 };
@@ -22,7 +23,7 @@ pub async fn list_guests(
   State(state): State<AppState>,
   authz: Authz,
 ) -> AppResult<Json<Vec<GuestResponse>>> {
-  authz.require_global(READ_GUEST).await?;
+  authz.global().require(READ_GUEST).await?;
   let guests = GuestStore::list_all(&state.pool).await?;
   Ok(Json(guests.into_iter().map(Into::into).collect()))
 }
